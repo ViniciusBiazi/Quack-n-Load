@@ -1,6 +1,6 @@
 import pyxel
 from pyxel import *
-from time import time
+import time
 
 from utils.GameState import GameState
 
@@ -18,13 +18,15 @@ from scenes.Game import Game
 
 class App:
     def __init__(self):
-        init(384, 256, title="Quack'n'Load", fps=999)
+        init(384, 256, title="Quack'n'Load", fps=10)
 
         self.game_state = GameState()
 
-        # Inicializa o servidor e o cliente
+        # Instância fixa do jogo
+        self.game = Game()
+
         self.server = Server()
-        self.client = Client(self.game_state)
+        self.client = Client(self.game_state, self.game)
 
         # Instâncias fixas
         self.main_menu = MainMenu(self.game_state)
@@ -32,35 +34,18 @@ class App:
         self.host_menu = HostMenu(self.game_state, self.server, self.client)
         self.join_menu = JoinMenu(self.game_state, self.client)
 
-        # Instância fixa do jogo
-        self.game = Game()
-
         # Instância dinâmica do Lobby
         self.lobby = Lobby(self.game_state, self.client, self.server)
 
-        self.last_time = time()
-        self.current_time = time()
-
-        self.fps_timer = 0
-        self.frame_count = 0
-        self.fps = 0
+        self.last_time = time.monotonic()
+        self.current_time = time.monotonic()
 
         run(self.update, self.draw)
 
     def update(self):
-        self.current_time = time()
+        self.current_time = time.monotonic()
         delta_time = self.current_time - self.last_time
         self.last_time = self.current_time
-
-        # Atualiza o FPS
-        self.fps_timer += delta_time
-        self.frame_count += 1
-
-        if self.fps_timer >= 1:
-            self.fps = self.frame_count
-            self.fps_timer = 0
-            self.frame_count = 0
-
 
         if self.game_state.current_state == "main_menu":
             self.main_menu.update()
@@ -72,6 +57,8 @@ class App:
             self.lobby.update()
         elif self.game_state.current_state == "game":
             self.game.update(delta_time=delta_time)
+        
+        time.sleep(0.01)
 
     def draw(self):
         cls(0)
@@ -86,6 +73,8 @@ class App:
             self.lobby.draw()
         elif self.game_state.current_state == "game":
             self.game.draw()
+
+        time.sleep(0.01)
 
 if __name__ == "__main__":
     App()

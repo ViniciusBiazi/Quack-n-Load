@@ -18,6 +18,7 @@ class Server:
         self.udp_socket = None
         self.udp_port = udp_port
 
+        self.accepting = False
         self.running = False
 
         self.lock = threading.Lock()
@@ -32,10 +33,10 @@ class Server:
             ip = "127.0.0.1"
         finally:
             s.close()
-
         return ip
 
     def start_server(self):
+        self.accepting = True
         self.running = True
 
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # cria um socket TCP
@@ -53,24 +54,23 @@ class Server:
         threading.Thread(target=self.send_pings, daemon=True).start() # cria uma nova thread para enviar PINGs
 
     def listen_for_clients(self):
-        while self.running:
+        while self.accepting and self.running:
             try:
                 client_tcp_socket, client_tcp_addr = self.tcp_socket.accept() # aceita um novo cliente TCP
-
-                if len(self.clients) >= self.max_clients: # se o número máximo de clientes for atingido
-                    print("Max clients reached, closing connection")
-                    client_tcp_socket.sendall("SERVER_FULL|".encode()) # envia uma mensagem para o cliente
-                    client_tcp_socket.close()
-                    continue
 
                 client_id = len(self.clients) # ID do cliente
 
                 self.clients[client_id] = ClientInfo(client_id, client_tcp_addr, client_tcp_socket) # cria um novo ClientInfo
 
+                if self.max_clients and len(self.clients) >= self.max_clients:
+                    self.accepting = False
+
                 threading.Thread(target=self.listen_tcp_data, args=(client_id,), daemon=True).start() # cria uma nova thread para lidar com o cliente TCP
 
             except Exception as e:
                 print(f"Error accepting client: {e}")
+
+        print("No longer accepting new clients.")
 
     def listen_tcp_data(self, client_id):
         client = self.clients[client_id]
@@ -83,15 +83,27 @@ class Server:
                 data = client.tcp_socket.recv(1024) # recebe dados do cliente
                 if not data:
                     break
+                
+                packets = data.split(b"|") # divide os dados recebidos em pacotes
+                for packet in packets:
+                    if not packet:
+                        continue
 
-                # Processa os dados recebidos
-                self.process_tcp_data(data, client_id)
+                    # Processa cada pacote
+                    self.process_tcp_data(packet, client_id) # processa os dados recebidos do cliente
 
             except Exception as e:
                 print(f"Error handling client {client_id}: {e}")
                 break
 
+            # time.sleep(0.01)
+        
+        # Remove o cliente da lista de clientes
+        if client_id in self.clients:
+            del self.clients[client_id]
+
     def process_tcp_data(self, data, client_id):
+        start = time.time() # marca o tempo de início
         try:
             message = data.decode("utf-8") # decodifica os dados recebidos
             # print(f"Received message from client: {message}")
@@ -107,9 +119,26 @@ class Server:
                         client.ping = int((time.monotonic() - timestamp) * 1000) # calcula o ping
 
                     self.broadcast(f"UPDATE_PING:{client_id};{client.ping}|") # envia o ping atualizado para todos os clientes
+                    print(f"Client {client_id} ping: {client.ping}ms")
+
+            # elif message.startswith("DISCONNECT"):
+            #     self.broadcast(f"REMOVE_PLAYER:{client_id}|", exclude_client_id=client_id)
+
+            #     try:
+            #         self.clients[client_id].tcp_socket.shutdown(socket.SHUT_RDWR) # fecha o socket TCP
+            #         self.clients[client_id].tcp_socket.close()
+
+            #     except Exception as e:
+            #         print(f"Error closing client {client_id}: {e}")
+
+            #     finally:
+            #         del self.clients[client_id]
 
         except Exception as e:
             print(f"Error processing client data: {e}")
+
+        end = time.time()
+        print(f"Processing time server: {end - start:.6f} seconds")
 
     def send_pings(self):
         while self.running:
@@ -120,8 +149,6 @@ class Server:
         while self.running:
             try:
                 data, addr = self.udp_socket.recvfrom(1024) # recebe dados do cliente
-                if not data:
-                    break
 
                 # Processa os dados recebidos
                 self.process_udp_data(data, addr)
@@ -129,13 +156,16 @@ class Server:
             except Exception as e:
                 print(f"Error handling game data: {e}")
                 break
+            
+            time.sleep(0.01)
 
     def process_udp_data(self, data, addr):
         try:
             message = data.decode("utf-8") # decodifica os dados recebidos
-            print(f"Received game data from client: {message}")
+            # print(f"Received game data from client: {message}")
 
             if message.startswith("HELLO:"):
+                print(f"Received HELLO from {addr}")
                 _, client_id = message.split(":")
                 client_id = int(client_id)
 
@@ -149,6 +179,22 @@ class Server:
 
                     self.broadcast(f"ADD_PLAYER:{client_id};{client.nickname}|", exclude_client_id=client_id) # envia uma mensagem para todos os clientes que um novo player foi adicionado
 
+            # elif message.startswith("PLAYER_UPDATE:"):
+            #     _, info = message.split(":")
+            #     client_id, x, y, sprite = info.split(";")
+
+            #     client_id = int(client_id)
+            #     x = float(x)
+            #     y = float(y)
+            #     sprite = tuple(map(int, sprite.strip("()").split(","))) # converte a string em uma tupla
+
+            #     if client_id in self.clients:
+            #         client = self.clients[client_id]
+            #         client.x = x
+            #         client.y = y
+            #         client.sprite = sprite
+
+            #         self.broadcast(f"PLAYER_UPDATE:{client_id};{x};{y};{sprite}", exclude_client_id=client_id, udp=True) # envia uma mensagem para todos os clientes que o jogador foi atualizado
         except Exception as e:
             print(f"Error processing game data: {e}")
 
@@ -166,37 +212,49 @@ class Server:
             except Exception as e:
                 print(f"Error broadcasting to client {client_id}: {e}")
 
-    def stop_server(self):
-        self.broadcast("SERVER_SHUTDOWN")
-        self.running = False
+    # def stop_server(self):
+    #     self.broadcast("SERVER_SHUTDOWN|")
+    #     self.running = False
+    #     self.accepting = False
 
-        for client_id, client in self.clients.items():
-            try:
-                if client.tcp_socket:
-                    client.tcp_socket.shutdown(socket.SHUT_RDWR) # fecha o socket TCP
-                    client.tcp_socket.close()
+    #     for client_id, client in self.clients.items():
+    #         try:
+    #             if client.tcp_socket:
+    #                 client.tcp_socket.shutdown(socket.SHUT_RDWR) # fecha o socket TCP
+    #                 client.tcp_socket.close()
 
-            except Exception as e:
-                print(f"Error closing client {client_id}: {e}")
+    #         except Exception as e:
+    #             print(f"Error closing client {client_id}: {e}")
         
-        self.clients.clear() # limpa o dicionário de clientes
+    #     self.clients.clear() # limpa o dicionário de clientes
 
-        if self.tcp_socket:
-            try:
-                self.tcp_socket.close() # fecha o socket TCP
-            except Exception as e:
-                print(f"Error closing lobby socket: {e}")
+    #     if self.tcp_socket:
+    #         try:
+    #             self.tcp_socket.shutdown(socket.SHUT_RDWR) # fecha o socket TCP
+    #             self.tcp_socket.close() # fecha o socket TCP
+    #         except Exception as e:
+    #             print(f"Error closing lobby socket: {e}")
 
-            self.tcp_socket = None
-            self.tcp_port = 0
+    #         self.tcp_socket = None
+    #         self.tcp_port = 0
 
-        if self.udp_socket:
-            try:
-                self.udp_socket.close() # fecha o socket UDP
-            except Exception as e:
-                print(f"Error closing game socket: {e}")
+    #     if self.udp_socket:
+    #         try:
+    #             self.udp_socket.close() # fecha o socket UDP
+    #         except Exception as e:
+    #             print(f"Error closing game socket: {e}")
 
-            self.udp_socket = None
-            self.udp_port = 0
+    #         self.udp_socket = None
+    #         self.udp_port = 0
 
-        
+    # def start_game(self):
+    #     x, y = 10, 10
+    #     for client_id, client in self.clients.items():
+    #         client.x = x
+    #         client.y = y
+
+    #         x += 50
+    #         y += 0
+    #         client.tcp_socket.sendall(f"POSITION_PLAYER:{client_id};{client.x};{client.y}|".encode())
+
+    #     self.broadcast(f"START_GAME|") # envia uma mensagem para todos os clientes que o jogo começou

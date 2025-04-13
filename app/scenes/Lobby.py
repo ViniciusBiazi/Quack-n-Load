@@ -14,13 +14,18 @@ class Lobby:
 
     def update(self):
         if btnp(KEY_Q):
-            if self.game_state.is_host:
-                self.server.stop_server()
-
             self.game_state.set_game_state("main_menu")
 
+            if self.game_state.is_host:
+                print("Stopping server...")
+                # self.server.stop_server()
+            else:
+                print("Disconnecting client...")
+                # self.client.disconnect()
+
         if self.game_state.is_host and btnp(KEY_RETURN):
-            print("[Lobby] Starting game...")
+            print("Starting game...")
+            # self.server.start_game()
 
     def draw(self):
         pyxel.cls(0)
