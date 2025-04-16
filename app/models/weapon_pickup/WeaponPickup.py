@@ -15,7 +15,6 @@ class WeaponPickup(PhysicsObject):
     def __init__(self, x, y, weapon_type, ammo, reserve_ammo, remove_timer):
         """ Inicializa a arma no chão com base no tipo especificado. """
         super().__init__(x, y, self.WEAPON_DATA[weapon_type]["width"], self.WEAPON_DATA[weapon_type]["height"])
-
         self.set_center_position(x, y)
 
         self.weapon_type = weapon_type

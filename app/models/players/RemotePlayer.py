@@ -18,13 +18,20 @@ class RemotePlayer(Entity):
 
         self.weapon: RemoteWeapon = None
 
-    def update_remote_player(self, x, y, sprite):
-        self.x = x
-        self.y = y
-
+    def update_remote_player(self, x, y, sprite, weapon=None):
+        self.set_position(x, y)
         self.entity_collider.update_collider(x, y)
 
         self.sprite = sprite
+
+        if weapon:
+            self.weapon = RemoteWeapon()
+            self.weapon.x = weapon[0]
+            self.weapon.y = weapon[1]
+            self.weapon.sprite = weapon[2]
+            self.weapon.rotation = weapon[3]
+        else:
+            self.weapon = None
 
     def draw(self):
         if self.sprite:

@@ -68,6 +68,8 @@ class Player(PhysicsObject):
         self.weapon_pickup_manager = weapon_pickup_manager
         self.projectile_manager = projectile_manager
 
+        self.draw_sprite = (*self.current_animation[self.sprite], *self.sprite_flip)  # Sprite atual do jogador
+
     def update_player(self, delta_time):
         """ Atualiza o estado do player, incluindo controle e física. """
         # Lida com a entrada do jogador
@@ -161,7 +163,8 @@ class Player(PhysicsObject):
             self.sprite = (self.sprite + 1) % len(self.current_animation)
 
     def draw(self):
-        blt(self.x, self.y, 0, *self.current_animation[self.sprite], *self.sprite_flip)
+        self.draw_sprite = (*self.current_animation[self.sprite], *self.sprite_flip)  # Sprite atual do jogador
+        blt(self.x, self.y, 0, *self.draw_sprite)  # Desenha o sprite do jogador
         
         if self.weapon:
             self.weapon.draw()

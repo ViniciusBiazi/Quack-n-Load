@@ -4,10 +4,10 @@ from pyxel import *
 from models.core.PhysicsObject import PhysicsObject
 
 class DeadPlayer(PhysicsObject):
-    def __init__(self, x, y, width=16, height=8, player_skin=0, direction=True):
+    def __init__(self, x, y, width=16, height=8, player_id=0, direction=True):
         super().__init__(x, y, width, height)
-
-        self.player_skin = player_skin
+        self.player_id = player_id
+        self.player_skin = player_id
 
         self.sprite_right = (-width, height, 6)
         self.sprite_left = (width, height, 6)

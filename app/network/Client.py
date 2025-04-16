@@ -1,24 +1,24 @@
 import socket
 import threading
 import time
+import os
+from multiprocessing import Queue
 
 from network.ClientInfo import PlayerInfo
-from utils.GameState import GameState
-from scenes.Game import Game
 
 class Client:
-    def __init__(self, game_state: GameState, game: Game):
-        self.client_id = None
-        self.game = game
+    def __init__(self, client_to_game_queue: Queue, game_to_client_queue: Queue):
+        self.client_id = None # Client ID
 
-        self.game_state = game_state
+        self.game_to_client_queue = game_to_client_queue
+        self.client_to_game_queue = client_to_game_queue
 
-        self.host = None
-        self.tcp_port = None
-        self.udp_port = None
+        self.host = None # Server address
+        self.tcp_port = None # Server TCP port
+        self.udp_port = None # Server UDP port
 
-        self.tcp_socket = None
-        self.udp_socket = None
+        self.tcp_socket = None # Client TCP socket
+        self.udp_socket = None # Client UDP socket
 
         self.connected = False # Flag to check if the client is connected to the server
 
@@ -34,12 +34,14 @@ class Client:
             self.tcp_socket.connect((self.host, self.tcp_port)) # Conecto meu socket TCP ao servidor
             self.connected = True 
 
+            self.client_to_game_queue.put("CONNECTED") # Send a message to the game process
+
             threading.Thread(target=self.receive_tcp_data, daemon=True).start() # Start a thread to receive lobby data from the server
             threading.Thread(target=self.receive_udp_data, daemon=True).start() # Start a thread to receive game data from the server
 
-        except socket.error as e:
-            print(f"Error connecting to server: {e}")
-            self.connected = False
+        except Exception as e:
+            self.client_to_game_queue.put(f"CONNECTION_ERROR:{type(e).__name__}") # Send an error message to the game process
+            self.disconnect() # Disconnect if an error occurs
 
     def receive_tcp_data(self):
         while self.connected:
@@ -54,114 +56,75 @@ class Client:
                     if not packet:
                         continue
 
-                    # Process each packet
-                    self.process_tcp_data(packet)
+                    message = packet.decode() # Decode the received data
+                    # print(f"Received lobby data from server: {message}")
+
+                    if message.startswith("SERVER_FULL"):
+                        self.client_to_game_queue.put("SERVER_FULL")
+                        self.disconnect()
+
+                    elif message.startswith("GAME_CONNECTION:"):
+                        _, info = message.split(":")
+                        client_id, udp_port = info.split(";")
+
+                        self.client_id = int(client_id)
+                        self.udp_port = int(udp_port)
+                        self.players[self.client_id] = PlayerInfo(self.client_id) # Add the player to the players dictionary
+
+                        self.client_to_game_queue.put(f"PLAYER_ID:{client_id}") # Send the client ID to the game process
+
+                        # envia um HELLO para o servidor UDP 
+                        self.udp_socket.sendto(f"GAME_CONNECTION:{self.client_id}".encode(), (self.host, self.udp_port))
+                    
+                    elif message.startswith("PING:"):
+                        # Respond to the server's PING
+                        self.tcp_socket.sendall(message.encode())
+
+                    elif message.startswith("UPDATE_PING:"):
+                        _, info = message.split(":")
+                        client_id, ping = info.split(";")
+
+                        client_id = int(client_id)
+                        ping = int(ping)
+
+                        if client_id in self.players.keys():
+                            self.players[client_id].ping = ping
+                            self.client_to_game_queue.put(f"UPDATE_PING:{client_id};{ping}") # Send the updated ping to the game process
+
+                    elif message.startswith("ADD_PLAYER:"):
+                        _, client_id = message.split(":")
+
+                        client_id = int(client_id)
+                        self.players[client_id] = PlayerInfo(client_id)
+                        self.client_to_game_queue.put(f"ADD_PLAYER:{client_id}") # Send the new player ID to the game process
+                    
+                    elif message.startswith("REMOVE_PLAYER:"):
+                        _, client_id = message.split(":")
+                        client_id = int(client_id)
+
+                        if client_id in self.players.keys():
+                            del self.players[client_id]
+                            self.client_to_game_queue.put(f"REMOVE_PLAYER:{client_id}")
+
+                    elif message.startswith("SERVER_STOPPED"):
+                        self.disconnect()
+                        self.client_to_game_queue.put("DISCONNECTED")
+
+                    elif message.startswith("START_GAME"):
+                        self.client_to_game_queue.put("START_GAME")
+                        self.tcp_socket.sendall("GAME_STARTED|".encode()) # Send a message to the server to start the game
+
+                    elif message.startswith("ADD_GAME_PLAYER:"):
+                        self.client_to_game_queue.put(message) # Send the player update to the game process
+
+                    elif message.startswith("ADD_WEAPON_PICKUP:"):
+                        self.client_to_game_queue.put(message) # Send the weapon pickup update to the game process
 
             except socket.error as e:
                 print(f"Error receiving data: {e}")
                 break
-            
-            time.sleep(0.01)
 
-        # self.disconnect() # Disconnect if an error occurs
-        self.connected = False
-
-    def process_tcp_data(self, data):
-        start = time.time()
-        try:
-            message = data.decode("utf-8") # Decode the received data
-            # print(f"Received lobby data from server: {message}")
-
-            if message.startswith("PING:"):
-                self.tcp_socket.sendall(message.encode())
-
-            elif message.startswith("START_GAME_CONNECTION:"):
-                _, info = message.split(":")
-                client_id, udp_port = info.split(";")
-
-                self.client_id = int(client_id)
-                self.udp_port = int(udp_port)
-
-                self.players[self.client_id] = PlayerInfo(self.client_id) # Add the player to the players dictionary
-
-                # envia um HELLO para o servidor UDP 
-                self.udp_socket.sendto(f"HELLO:{self.client_id}".encode(), (self.host, self.udp_port))
-
-            elif message.startswith("UPDATE_PING:"):
-                _, info = message.split(":")
-                client_id, ping = info.split(";")
-
-                client_id = int(client_id)
-                ping = int(ping)
-
-                if client_id in self.players:
-                    self.players[client_id].ping = ping
-
-            # elif message.startswith("SERVER_SHUTDOWN"):
-            #     try:
-            #         if self.tcp_socket:
-            #             self.tcp_socket.shutdown(socket.SHUT_RDWR)
-            #             self.tcp_socket.close()
-            #         if self.udp_socket:
-            #             self.udp_socket.shutdown(socket.SHUT_RDWR)
-            #             self.udp_socket.close()
-            #     except Exception as e:
-            #         print(f"Error closing sockets: {e}")
-            #     finally:
-            #         self.connected = False
-            #         self.tcp_socket = None
-            #         self.udp_socket = None
-            #         self.client_id = None
-            #         self.udp_port = None
-            #         self.server_host = None
-            #         self.tcp_port = None
-            #         self.players.clear()
-
-            #     self.game_state.set_game_state("main_menu")
-            
-            elif message.startswith("ADD_PLAYER:"):
-                _, info = message.split(":")
-                client_id, nickname = info.split(";")
-
-                client_id = int(client_id)
-
-                if client_id not in self.players:
-                    self.players[client_id] = PlayerInfo(client_id, nickname)
-            
-            # elif message.startswith("REMOVE_PLAYER:"):
-            #     _, info = message.split(":")
-            #     client_id = int(info)
-
-            #     if client_id in self.players:
-            #         del self.players[client_id]
-
-            # elif message.startswith("POSITION_PLAYER:"):
-            #     _, info = message.split(":")
-            #     client_id, x, y = info.split(";")
-
-            #     client_id = int(client_id)
-            #     x = float(x)
-            #     y = float(y)
-
-            #     if client_id in self.players:
-            #         self.players[client_id].x = x
-            #         self.players[client_id].y = y
-            
-            # elif message.startswith("START_GAME"):
-            #     for player_id, player in self.players.items():
-            #         if player_id == self.client_id:
-            #             self.game.player_manager.add_player(player.x, player.y, player_id)
-
-            #         else:
-            #             self.game.player_manager.add_remote_player(player.x, player.y, player_id)
-
-            #     self.game_state.set_game_state("game")
-
-        except Exception as e:
-            print(f"Error processing tcp data: {e}")
-
-        end = time.time()
-        print(f"Processing time client: {end - start:.6f} seconds")
+        self.disconnect() # Disconnect if an error occurs
 
     def receive_udp_data(self):
         while self.connected:
@@ -170,65 +133,71 @@ class Client:
                 if not data:
                     break
 
-                # Process the received data
-                self.process_udp_data(data)
+                message = data.decode() # Decode the received data
+                # print(f"Received game data from server: {message}")
+
+                if message.startswith("UPDATE_PLAYER:"):
+                    self.client_to_game_queue.put(message) # Send the player update to the game process
+
+                elif message.startswith("ADD_PROJECTILE:"):
+                    self.client_to_game_queue.put(message)
 
             except socket.error as e:
                 print(f"Error receiving udp data: {e}")
                 break
 
-        self.connected = False
+        self.disconnect() # Disconnect if an error occurs
 
-    def process_udp_data(self, data):
+    def disconnect(self):
         try:
-            message = data.decode("utf-8") # Decode the received data
-            print(f"Received game data from server: {message}")
-
-            # if message.startswith("PLAYER_UPDATE:"):
-            #     _, info = message.split(":")
-            #     client_id, x, y, sprite = info.split(";")
-
-            #     client_id = int(client_id)
-            #     x = float(x)
-            #     y = float(y)
-            #     sprite = tuple(map(int, sprite.strip("()").split(","))) # converte a string em uma tupla
-
-            #     if client_id in self.players:
-            #         self.players[client_id].x = x
-            #         self.players[client_id].y = y
-            #         self.players[client_id].sprite = sprite
-            #         self.game.player_manager.update_remote_player(client_id, x, y, sprite)
+            if self.tcp_socket:
+                self.tcp_socket.close()
+            if self.udp_socket:
+                self.udp_socket.close()
         except Exception as e:
-            print(f"Error processing udp data: {e}")
+            print(f"Error closing sockets: {e}")
+        finally:
+            self.connected = False
+            self.tcp_socket = None
+            self.udp_socket = None
+            self.client_id = None
+            self.udp_port = None
+            self.host = None
+            self.tcp_port = None
+            self.players.clear()
 
-    # def disconnect(self):
-    #     try:
-    #         if self.tcp_socket:
-    #             self.tcp_socket.sendall(f"DISCONNECT|".encode())
-    #             self.tcp_socket.shutdown(socket.SHUT_RDWR)
-    #             self.tcp_socket.close()
-    #         if self.udp_socket:
-    #             self.udp_socket.shutdown(socket.SHUT_RDWR)
-    #             self.udp_socket.close()
-    #     except Exception as e:
-    #         print(f"Error closing sockets: {e}")
-    #     finally:
-    #         self.connected = False
-    #         self.tcp_socket = None
-    #         self.udp_socket = None
-    #         self.client_id = None
-    #         self.udp_port = None
-    #         self.server_host = None
-    #         self.tcp_port = None
-    #         self.players.clear()
-    
-    # from models.players.Player import Player
+def start_client_process(host, tcp_port, client_to_game_queue: Queue, game_to_client_queue: Queue):
+    client = Client(client_to_game_queue, game_to_client_queue) # Create a new client instance
+    client.connect(host, tcp_port)
 
-    # def send_player_data(self, player_data: Player):
-    #     """ Envia os dados do jogador para o servidor. """
-    #     player = self.players[self.client_id]
-    #     player.x = player_data.x
-    #     player.y = player_data.y
-    #     player.sprite = (*player_data.current_animation[player_data.sprite], *player_data.sprite_flip)
+    tickrate = 120
+    tick_duration = 1 / tickrate
 
-    #     self.udp_socket.sendto(f"PLAYER_UPDATE:{self.client_id};{player.x};{player.y};{player.sprite}".encode(), (self.host, self.udp_port))
+    pid_pai = os.getppid()
+
+    while client.connected:
+        if os.getppid() != pid_pai:
+            break
+        
+        start_time = time.monotonic()
+
+        # Process incoming data from the server
+        while not client.game_to_client_queue.empty():
+            message = client.game_to_client_queue.get()
+            # print(f"Processing message from game: {message}")
+
+            if message == "DISCONNECT":
+                client.disconnect()
+                client.client_to_game_queue.put("DISCONNECTED")
+
+            elif message.startswith("UPDATE_PLAYER:"):
+                client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
+
+            elif message.startswith("ADD_PROJECTILE:"):
+                client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
+        
+        elapsed_time = time.monotonic() - start_time
+        sleep_time = tick_duration - elapsed_time
+        if sleep_time > 0:
+            time.sleep(sleep_time)
+

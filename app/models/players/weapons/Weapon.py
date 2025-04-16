@@ -43,6 +43,8 @@ class Weapon(Entity):
 
         self.auto_fire = False
 
+        self.draw_sprite = (*self.weapon_sprite, *self.weapon_flip)
+
     def update(self, x, y, delta_time):
         self.set_center_position(x, y)
 
@@ -74,8 +76,8 @@ class Weapon(Entity):
     def draw(self):
         """Renderiza a arma e interface."""
         self.crosshair.draw()
-
-        blt(self.x, self.y, 0, *self.weapon_sprite, *self.weapon_flip, self.weapon_rotation)
+        self.draw_sprite = (*self.weapon_sprite, *self.weapon_flip)
+        blt(self.x, self.y, 0, *self.draw_sprite, self.weapon_rotation)
 
     def shoot(self):
         """Método para disparar a arma. Deve ser implementado nas subclasses."""

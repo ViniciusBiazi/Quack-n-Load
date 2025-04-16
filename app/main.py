@@ -1,41 +1,26 @@
-import pyxel
 from pyxel import *
 import time
 
 from utils.GameState import GameState
 
 from scenes.MainMenu import MainMenu
-
 from scenes.JoinMenu import JoinMenu
 from scenes.HostMenu import HostMenu
-
 from scenes.Lobby import Lobby
-
-from network.Server import Server
-from network.Client import Client
-
 from scenes.Game import Game
 
 class App:
     def __init__(self):
-        init(384, 256, title="Quack'n'Load", fps=10)
+        init(384, 256, title="Quack'n'Load", fps=999)
 
         self.game_state = GameState()
 
-        # Instância fixa do jogo
-        self.game = Game()
-
-        self.server = Server()
-        self.client = Client(self.game_state, self.game)
-
         # Instâncias fixas
         self.main_menu = MainMenu(self.game_state)
-
-        self.host_menu = HostMenu(self.game_state, self.server, self.client)
-        self.join_menu = JoinMenu(self.game_state, self.client)
-
-        # Instância dinâmica do Lobby
-        self.lobby = Lobby(self.game_state, self.client, self.server)
+        self.host_menu = HostMenu(self.game_state)
+        self.join_menu = JoinMenu(self.game_state)
+        self.lobby = Lobby(self.game_state)
+        self.game = Game(self.game_state)
 
         self.last_time = time.monotonic()
         self.current_time = time.monotonic()
@@ -57,8 +42,6 @@ class App:
             self.lobby.update()
         elif self.game_state.current_state == "game":
             self.game.update(delta_time=delta_time)
-        
-        time.sleep(0.01)
 
     def draw(self):
         cls(0)
@@ -73,8 +56,6 @@ class App:
             self.lobby.draw()
         elif self.game_state.current_state == "game":
             self.game.draw()
-
-        time.sleep(0.01)
 
 if __name__ == "__main__":
     App()
