@@ -117,9 +117,6 @@ class Client:
                     elif message.startswith("ADD_GAME_PLAYER:"):
                         self.client_to_game_queue.put(message) # Send the player update to the game process
 
-                    elif message.startswith("ADD_WEAPON_PICKUP:"):
-                        self.client_to_game_queue.put(message) # Send the weapon pickup update to the game process
-
             except socket.error as e:
                 print(f"Error receiving data: {e}")
                 break
@@ -140,6 +137,21 @@ class Client:
                     self.client_to_game_queue.put(message) # Send the player update to the game process
 
                 elif message.startswith("ADD_PROJECTILE:"):
+                    self.client_to_game_queue.put(message)
+
+                elif message.startswith("REMOVE_PROJECTILE:"):
+                    self.client_to_game_queue.put(message)
+
+                elif message.startswith("ADD_WEAPON_PICKUP:"):
+                    self.client_to_game_queue.put(message)
+
+                elif message.startswith("REMOVE_WEAPON_PICKUP:"):
+                    self.client_to_game_queue.put(message)
+
+                elif message.startswith("PICKUP_WEAPON:"):
+                    self.client_to_game_queue.put(message)
+
+                elif message.startswith("RECEIVE_DAMAGE:"):
                     self.client_to_game_queue.put(message)
 
             except socket.error as e:
@@ -194,6 +206,18 @@ def start_client_process(host, tcp_port, client_to_game_queue: Queue, game_to_cl
                 client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
 
             elif message.startswith("ADD_PROJECTILE:"):
+                client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
+
+            elif message.startswith("REMOVE_PROJECTILE:"):
+                client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
+            
+            elif message.startswith("TRY_PICKUP_WEAPON:"):
+                client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
+            
+            elif message.startswith("DROP_WEAPON:"):
+                client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
+            
+            elif message.startswith("DEAL_DAMAGE:"):
                 client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
         
         elapsed_time = time.monotonic() - start_time

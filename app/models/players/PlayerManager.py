@@ -1,6 +1,8 @@
 import pyxel
 from pyxel import *
 
+from utils.GameState import GameState
+
 from models.players.Player import Player
 from models.players.RemotePlayer import RemotePlayer
 from models.players.DeadPlayer import DeadPlayer
@@ -11,10 +13,12 @@ from models.weapon_pickup.WeaponPickupManager import WeaponPickupManager
 from models.projectiles.ProjectileManager import ProjectileManager
 
 class PlayerManager:
-    def __init__(self, physics_manager: PhysicsManager, weapon_pickup_manager: WeaponPickupManager, projectile_manager: ProjectileManager):
+    def __init__(self, physics_manager: PhysicsManager, weapon_pickup_manager: WeaponPickupManager, projectile_manager: ProjectileManager, game_state: GameState):
         """ Inicializa o PlayerManager. """
         self.player: Player = None
         self.player_gui: PlayerGui = None
+
+        self.game_state = game_state
 
         self.remote_players: dict[int, RemotePlayer] = {}
         self.dead_players: dict[int, DeadPlayer] = {}
@@ -28,15 +32,16 @@ class PlayerManager:
         if self.player:
             self.player.update_player(delta_time)
 
-        # TODO ARRUMAR A COLISAO DO PROJETIL
-        for projectile in self.projectile_manager.projectiles:
-            for remote_player in self.remote_players.values():
+        for projectile_id, projectile in self.projectile_manager.projectiles.items():
+            for remote_id, remote_player in self.remote_players.items():
                 if projectile.collider.check_collision_rect(remote_player.entity_collider):
                     # Se o projétil colidir com um jogador remoto, remova o projétil
-                    print(f"Projétil colidiu com o jogador remoto {remote_player.id}")
-                    self.projectile_manager.projectiles.remove(projectile)
+                    self.game_state.game_to_client_queue.put(f"DEAL_DAMAGE:{remote_id};{projectile.damage}")  # Envia a mensagem para o cliente
+                    self.projectile_manager.to_remove.append(projectile_id)  # Adiciona o projétil à lista de remoção
+                    break
 
-        for dead_player in self.dead_players:
+        to_remove = []
+        for id, dead_player in self.dead_players.items():
             dead_player.update_dead_player(delta_time)
 
             if dead_player.on_ground and dead_player in self.physics_manager.physics_objects:
@@ -46,7 +51,11 @@ class PlayerManager:
             if dead_player.remove_timer <= 0:
                 # Remove o jogador morto da lista de objetos físicos
                 self.physics_manager.remove_physics_object(dead_player)
-                self.dead_players.remove(dead_player)
+                to_remove.append(id)
+
+        for id in to_remove:
+            # Remove o jogador morto da lista de jogadores mortos
+            self.dead_players.pop(id, None)
 
     def add_player(self, x, y, player_id):
         """ Adiciona um novo jogador expecificamente o jogador local. """
@@ -102,6 +111,20 @@ class PlayerManager:
 
         return player_data
     
+    def pickup_weapon(self, weapon_pickup_id):
+        """ Tenta pegar uma arma do pickup. """
+        weapon_pickup = self.weapon_pickup_manager.weapon_pickups.pop(weapon_pickup_id, None)
+        if weapon_pickup:
+            self.player.pickup_weapon(weapon_pickup)
+            self.physics_manager.remove_physics_object(weapon_pickup)
+    
+    def receive_damage(self, damage):
+        """ Recebe dano do jogador remoto. """
+        if self.player:
+            self.player.health -= damage
+            if self.player.health <= 0:
+                self.kill_player()
+
     def draw(self):
         """ Desenha todos os jogadores e jogadores mortos na tela. """
         if self.player:
@@ -110,6 +133,7 @@ class PlayerManager:
 
         for remote_player in self.remote_players.values():
             remote_player.draw()
+            rectb(remote_player.entity_collider.x, remote_player.entity_collider.y, remote_player.entity_collider.width, remote_player.entity_collider.height, 0)  # Desenha o retângulo de colisão do jogador remoto
 
         for dead_player in self.dead_players.values():
             dead_player.draw()

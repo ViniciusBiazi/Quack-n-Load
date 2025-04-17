@@ -26,7 +26,7 @@ class Game:
 
         self.weapon_pickup_manager = WeaponPickupManager(self.physics_manager, self.game_state)
 
-        self.player_manager = PlayerManager(self.physics_manager, self.weapon_pickup_manager, self.projectile_manager)
+        self.player_manager = PlayerManager(self.physics_manager, self.weapon_pickup_manager, self.projectile_manager, self.game_state)
 
     def update(self, delta_time):
         while not self.game_state.client_to_game_queue.empty():
@@ -64,24 +64,13 @@ class Game:
                     weapon = (weapon_x, weapon_y, weapon_sprite, weapon_rotation)
 
                 self.player_manager.update_remote_player(client_id, x, y, sprite, weapon)
-            
-            elif data.startswith("ADD_WEAPON_PICKUP:"):
-                _, info = data.split(":")
-                x, y, weapon_type, ammo, reserve_ammo, remove_timer = info.split(";")
-
-                x = float(x)
-                y = float(y)
-                weapon_type = int(weapon_type)
-                ammo = int(ammo)
-                reserve_ammo = int(reserve_ammo)
-                remove_timer = int(remove_timer)
-
-                self.weapon_pickup_manager.add_weapon_pickup(x, y, weapon_type, ammo, reserve_ammo, remove_timer)
 
             elif data.startswith("ADD_PROJECTILE:"):
                 _, info = data.split(":")
-                _ , x, y, angle, speed, damage, projectile_type = info.split(";")
+                client_id, projectile_id , x, y, angle, speed, damage, projectile_type = info.split(";")
 
+                client_id = int(client_id)
+                projectile_id = int(projectile_id)
                 x = float(x)
                 y = float(y)
                 angle = float(angle)
@@ -89,7 +78,52 @@ class Game:
                 damage = int(damage)
                 projectile_type = int(projectile_type)
 
-                self.projectile_manager.add_remote_projectile(x, y, angle, speed, damage, projectile_type)
+                if client_id == self.game_state.player_id:
+                    self.projectile_manager.add_projectile(projectile_id, x, y, angle, speed, damage, projectile_type)
+                else:
+                    self.projectile_manager.add_remote_projectile(projectile_id, x, y, angle, speed, damage, projectile_type)
+
+            elif data.startswith("REMOVE_PROJECTILE:"):
+                _, projectile_id = data.split(":")
+
+                self.projectile_manager.remove_projectile(int(projectile_id))
+
+            elif data.startswith("ADD_WEAPON_PICKUP:"):
+                _, info = data.split(":")
+                id, x, y, weapon_type, ammo, reserve_ammo, remove_timer = info.split(";")
+
+                id = int(id)
+                x = float(x)
+                y = float(y)
+                weapon_type = int(weapon_type)
+                ammo = int(ammo)
+                reserve_ammo = int(reserve_ammo)
+                remove_timer = int(remove_timer)
+
+                self.weapon_pickup_manager.add_weapon_pickup(id, x, y, weapon_type, ammo, reserve_ammo, remove_timer)
+
+            elif data.startswith("REMOVE_WEAPON_PICKUP:"):
+                _, weapon_pickup_id = data.split(":")
+                self.weapon_pickup_manager.remove_weapon_pickup(int(weapon_pickup_id))
+            
+            elif data.startswith("PICKUP_WEAPON:"):
+                _, info = data.split(":")
+                player_id, weapon_pickup_id = info.split(";")
+
+                player_id = int(player_id)
+                weapon_pickup_id = int(weapon_pickup_id)
+
+                if player_id == self.game_state.player_id:
+                    self.player_manager.pickup_weapon(weapon_pickup_id)
+                else:
+                    self.weapon_pickup_manager.remove_weapon_pickup(weapon_pickup_id)
+
+            elif data.startswith("RECEIVE_DAMAGE:"):
+                _, damage = data.split(":")
+
+                damage = int(damage)
+                
+                self.player_manager.receive_damage(damage)
 
         self.physics_manager.update_physics_manager(delta_time)
 
@@ -97,7 +131,7 @@ class Game:
         self.player_manager.update_player_manager(delta_time)
 
         # Atualiza os pickups de armas
-        self.weapon_pickup_manager.update_weapon_pickup_manager(delta_time)
+        self.weapon_pickup_manager.update_weapon_pickup_manager()
 
         # Atualiza os projéteis
         self.projectile_manager.update_projectile_manager(delta_time)

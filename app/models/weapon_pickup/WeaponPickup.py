@@ -12,10 +12,11 @@ class WeaponPickup(PhysicsObject):
         3: {"sprite": (72, 0), "width": 24, "height": 8}, # assault rifle
     }
 
-    def __init__(self, x, y, weapon_type, ammo, reserve_ammo, remove_timer):
+    def __init__(self, id, x, y, weapon_type, ammo, reserve_ammo, remove_timer):
         """ Inicializa a arma no chão com base no tipo especificado. """
         super().__init__(x, y, self.WEAPON_DATA[weapon_type]["width"], self.WEAPON_DATA[weapon_type]["height"])
         self.set_center_position(x, y)
+        self.id = id
 
         self.weapon_type = weapon_type
         self.weapon_sprite = self.WEAPON_DATA[weapon_type]["sprite"]
@@ -26,10 +27,6 @@ class WeaponPickup(PhysicsObject):
         self.pickable = False
 
         self.remove_timer = remove_timer
-
-    def update_weapon_pickup(self, delta_time):
-        if self.remove_timer > 0:
-            self.remove_timer -= delta_time
 
     def draw(self):
         """ Desenha o objeto na tela. """

@@ -30,7 +30,7 @@ class Pistol(Weapon):
         self.fire_timer = self.fire_rate
         self.can_fire = False
         
-        self.projectile_manager.add_projectile(self.weapon_muzzle_x, self.weapon_muzzle_y, angle=self.angle, speed=self.projectile_speed, damage=self.projectile_damage)
+        self.projectile_manager.try_add_projectile(self.weapon_muzzle_x, self.weapon_muzzle_y, angle=self.angle, speed=self.projectile_speed, damage=self.projectile_damage)
 
     def start_reload(self):
         self.is_reloading = True
