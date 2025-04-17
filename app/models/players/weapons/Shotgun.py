@@ -37,7 +37,7 @@ class Shotgun(Weapon):
         # Cria os projéteis da shotgun
         for i in range(3):
             angle_offset = (i - 1) * 5
-            self.projectile_manager.add_projectile(self.weapon_muzzle_x, self.weapon_muzzle_y, angle=self.angle + angle_offset, speed=self.projectile_speed, damage=self.projectile_damage, projectile_type=1)
+            self.projectile_manager.try_add_projectile(self.weapon_muzzle_x, self.weapon_muzzle_y, angle=self.angle + angle_offset, speed=self.projectile_speed, damage=self.projectile_damage, projectile_type=1)
 
     def start_reload(self):
         self.is_reloading = True

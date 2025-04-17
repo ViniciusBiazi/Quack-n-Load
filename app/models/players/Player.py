@@ -3,7 +3,11 @@ from pyxel import *
 
 from models.core.PhysicsObject import PhysicsObject
 from models.weapon_pickup.WeaponPickupManager import WeaponPickupManager
+from models.projectiles.ProjectileManager import ProjectileManager
 
+from models.weapon_pickup.WeaponPickup import WeaponPickup
+
+from models.players.weapons.Weapon import Weapon
 from models.players.weapons.Pistol import Pistol
 from models.players.weapons.Shotgun import Shotgun
 from models.players.weapons.Rifle import Rifle
@@ -22,7 +26,7 @@ class Player(PhysicsObject):
     ANIMATION_TIMER = 0.2  # Velocidade da animação
     MAX_HEALTH = 100  # Vida máxima do player
 
-    def __init__(self, x, y, width=13, height=16, player_id=0, weapon_pickup_manager: WeaponPickupManager = None, projectile_manager=None):
+    def __init__(self, x, y, width=13, height=16, player_id=0, weapon_pickup_manager: WeaponPickupManager = None, projectile_manager: ProjectileManager=None):
         super().__init__(x, y, width, height)  # Tamanho do objeto de fisica
         self.id = player_id
 
@@ -64,7 +68,7 @@ class Player(PhysicsObject):
         self.coyote_time = 0 # Tempo de coyote
 
         # Arma
-        self.weapon = None  # Arma atual do jogador
+        self.weapon: Weapon = None  # Arma atual do jogador
         self.weapon_pickup_manager = weapon_pickup_manager
         self.projectile_manager = projectile_manager
 
@@ -114,7 +118,7 @@ class Player(PhysicsObject):
             self.coyote_time = 0  # Reseta o tempo de coyote
 
         if btnp(KEY_E):
-            self.pickup_weapon()
+            self.try_pickup_weapon()
 
         if btnp(KEY_Q):
             self.drop_weapon()
@@ -169,30 +173,34 @@ class Player(PhysicsObject):
         if self.weapon:
             self.weapon.draw()
 
-    def pickup_weapon(self):
+    def try_pickup_weapon(self):
         """ Pega uma arma do WeaponPickupManager. """
-        for weapon_pickup in self.weapon_pickup_manager.weapon_pickups:
+        for weapon_id, weapon_pickup in self.weapon_pickup_manager.weapon_pickups.items():
             if self.entity_collider.check_collision_rect(weapon_pickup.entity_collider):
-                # Remove a arma do WeaponPickupManager
-                self.weapon_pickup_manager.remove_weapon_pickup(weapon_pickup)
+                self.weapon_pickup_manager.try_pickup_weapon(weapon_id)
+                break
 
-                if weapon_pickup.weapon_type == 0:
-                    weapon = Pistol(self.center_x, self.center_y, self.projectile_manager)
-                elif weapon_pickup.weapon_type == 1:
-                    weapon = Shotgun(self.center_x, self.center_y, self.projectile_manager)
-                elif weapon_pickup.weapon_type == 2:
-                    weapon = Rifle(self.center_x, self.center_y, self.projectile_manager)
-                elif weapon_pickup.weapon_type == 3:
-                    weapon = AssaultRifle(self.center_x, self.center_y, self.projectile_manager)
+    def pickup_weapon(self, weapon_pickup: WeaponPickup):
+        """ Pega uma arma do pickup. """
+        if self.weapon:
+            self.drop_weapon()
 
-                weapon.ammo = weapon_pickup.ammo
-                weapon.reserve_ammo = weapon_pickup.reserve_ammo
+        if weapon_pickup.weapon_type == 0: 
+            self.weapon = Pistol(self.center_x, self.center_y, projectile_manager=self.projectile_manager)
+        elif weapon_pickup.weapon_type == 1:
+            self.weapon = Shotgun(self.center_x, self.center_y, projectile_manager=self.projectile_manager)
+        elif weapon_pickup.weapon_type == 2:
+            self.weapon = Rifle(self.center_x, self.center_y, projectile_manager=self.projectile_manager)
+        elif weapon_pickup.weapon_type == 3:
+            self.weapon = AssaultRifle(self.center_x, self.center_y, projectile_manager=self.projectile_manager)
 
-                self.drop_weapon()
-                self.weapon = weapon
+        self.weapon.ammo = weapon_pickup.ammo
+        self.weapon.reserve_ammo = weapon_pickup.reserve_ammo
+
+        self.weapon_pickup_manager.remove_weapon_pickup(weapon_pickup.id)
 
     def drop_weapon(self):
         """ Deixa a arma no chão. """
         if self.weapon:
-            self.weapon_pickup_manager.add_weapon_pickup(self.center_x, self.center_y, self.weapon.weapon_type, self.weapon.ammo, self.weapon.reserve_ammo, 5)
+            self.weapon_pickup_manager.drop_weapon(self.weapon)
             self.weapon = None

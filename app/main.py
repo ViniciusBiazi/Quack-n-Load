@@ -11,7 +11,7 @@ from scenes.Game import Game
 
 class App:
     def __init__(self):
-        init(384, 256, title="Quack'n'Load", fps=999)
+        init(384, 256, title="Quack'n'Load", fps=120)
 
         self.game_state = GameState()
 
