@@ -5,9 +5,10 @@ from multiprocessing import Queue
 import os
 import random
 
-from network.ClientInfo import ClientInfo
+from network.NetworkInfo import ClientInfo
 from models.projectiles.Projectile import Projectile
-from models.weapon_pickup.WeaponPickup import WeaponPickup
+
+from network.NetworkInfo import ServerWeaponPickupInfo
 
 class Server:
     def __init__(self, server_to_game_queue: Queue, game_to_server_queue: Queue, host="0.0.0.0", tcp_port=0, udp_port=0, max_clients=4):
@@ -18,7 +19,8 @@ class Server:
 
         self.clients: dict[int, ClientInfo] = {} # dicionário de clientes conectados
         self.projectiles: dict[int, Projectile] = {} # dicionário de projéteis conectados
-        self.weapon_pickups: dict[int, WeaponPickup] = {} # dicionário de pickups de armas conectados
+
+        self.weapon_pickups: dict[int, ServerWeaponPickupInfo] = {} # dicionário de pickups de armas conectados
 
         self.max_clients = max_clients # número máximo de clientes permitidos
 
@@ -218,17 +220,19 @@ class Server:
                     if projectile_id in self.projectiles.keys():
                         self.projectiles.pop(projectile_id, None)
                         self.broadcast(f"REMOVE_PROJECTILE:{projectile_id}", exclude_client_id=client_id, udp=True) # envia uma mensagem para todos os clientes que o projétil foi removido
-                
-                elif message.startswith("TRY_PICKUP_WEAPON:"):
+            
+            # * -------------------------------------------------------------------
+            # * Comandos sobre os pickups de armas
+                elif message.startswith("PICKUP_WEAPON:"):
                     _, info = message.split(":")
                     client_id, weapon_pickup_id = info.split(";")
 
                     client_id = int(client_id)
                     weapon_pickup_id = int(weapon_pickup_id)
 
-                    if weapon_pickup_id in self.weapon_pickups.keys():
-                        self.broadcast(f"PICKUP_WEAPON:{client_id};{weapon_pickup_id}", udp=True) # envia uma mensagem para todos os clientes que o jogador pegou a arma
-                        self.weapon_pickups.pop(weapon_pickup_id, None) # remove o pickup de arma da lista de pickups
+                    if client_id in self.clients.keys() and weapon_pickup_id in self.weapon_pickups.keys():
+                        self.broadcast(f"REMOVE_WEAPON_PICKUP:{weapon_pickup_id}", exclude_client_id=client_id, udp=True)
+                        self.udp_socket.sendto(f"PICKUP_WEAPON:{weapon_pickup_id}".encode(), self.clients[client_id].udp_addr)
 
                 elif message.startswith("DROP_WEAPON:"):
                     _, info = message.split(":")
@@ -241,11 +245,11 @@ class Server:
                     reserve_ammo = int(reserve_ammo)
                     remove_timer = int(remove_timer)
 
-                    weapon_id = self.gen_id(self.weapon_pickups.keys()) # gera um ID para o pickup de arma
-
-                    self.weapon_pickups[weapon_id] = WeaponPickup(weapon_id, x, y, weapon_type, ammo, reserve_ammo, remove_timer) # cria um novo pickup de arma
+                    weapon_id = self.gen_id(self.weapon_pickups.keys())
+                    self.weapon_pickups[weapon_id] = ServerWeaponPickupInfo(weapon_id, remove_timer) # cria um novo pickup de arma
+                    
                     self.broadcast(f"ADD_WEAPON_PICKUP:{weapon_id};{x};{y};{weapon_type};{ammo};{reserve_ammo};{remove_timer}", udp=True) # envia uma mensagem para todos os clientes que um novo pickup de arma foi adicionado
-
+            # * -------------------------------------------------------------------
                 elif message.startswith("DEAL_DAMAGE:"):
                     _, info = message.split(":")
                     client_id, damage = info.split(";")
@@ -263,20 +267,18 @@ class Server:
 
     def broadcast(self, message, exclude_client_id=None, udp=False):
         with self.lock:
-            clients_copy = self.clients.copy() # faz uma cópia do dicionário de clientes
+            for client_id, client in self.clients.items():
+                if exclude_client_id is not None and client_id == exclude_client_id:
+                    continue
 
-        for client_id, client in clients_copy.items():
-            if exclude_client_id is not None and client_id == exclude_client_id:
-                continue
+                try:
+                    if udp and client.udp_addr:
+                        self.udp_socket.sendto(message.encode(), client.udp_addr) # envia dados para o cliente UDP
+                    else:
+                        client.tcp_socket.sendall(message.encode()) # envia dados para o cliente TCP
 
-            try:
-                if udp and client.udp_addr:
-                    self.udp_socket.sendto(message.encode(), client.udp_addr) # envia dados para o cliente UDP
-                else:
-                    client.tcp_socket.sendall(message.encode()) # envia dados para o cliente TCP
-
-            except Exception as e:
-                print(f"Error broadcasting to client {client_id}: {e}")
+                except Exception as e:
+                    print(f"Error broadcasting to client {client_id}: {e}")
 
     def stop_server(self):
         self.running = False
@@ -317,10 +319,12 @@ class Server:
         threading.Thread(target=self.handle_weapon_pickup, daemon=True).start() # cria uma nova thread para gerar pickups de armas
         self.broadcast("START_GAME|")
 
-    def handle_weapon_pickup(self):
+# * -------------------------------------------------------------------
+# TODO rever essa logica ( VER SOBRE LOCKS )
+    def handle_weapon_pickup(self): # thread para gerar e remover por tempo os pickups
         """ Cria e Remove pickups de armas por tempo. """
         weapon_data = {
-            0: {"ammo": 17, "reserve_ammo": 17 * 2}, # pistola
+            0: {"ammo": 17, "reserve_ammo": 17 * 3}, # pistola
             1: {"ammo": 5, "reserve_ammo": 5 * 3}, # shotgun
             2: {"ammo": 5, "reserve_ammo": 5 * 2}, # rifle
             3: {"ammo": 30, "reserve_ammo": 30 * 2}, # assault rifle
@@ -330,26 +334,30 @@ class Server:
                                (8*8, 20*8),(16*8, 14*8),(32*8, 14*8)] # Posições de spawn das armas
         
         random.shuffle(weapon_spawn_points) # embaralha as posições de spawn das armas
+
+        gen_weapon_timer = 5
         
         while self.in_game:
-            time.sleep(5) # espera um ciclo de 5 segundos
-            weapon_id = self.gen_id(self.weapon_pickups.keys()) # gera um ID para o pickup de arma
-            weapon_type = random.randint(0, 3) # gera um tipo de arma aleatório
-            weapon_spawn_point = weapon_spawn_points.pop(0) # remove o primeiro ponto de spawn da lista
-            weapon_spawn_points.append(weapon_spawn_point) # adiciona o ponto de spawn no final da lista
-            self.weapon_pickups[weapon_id] = WeaponPickup(weapon_id, weapon_spawn_point[0], weapon_spawn_point[1], weapon_type, weapon_data[weapon_type]["ammo"], weapon_data[weapon_type]["reserve_ammo"], 15) # cria um novo pickup de arma
-            self.broadcast(f"ADD_WEAPON_PICKUP:{weapon_id};{weapon_spawn_point[0]};{weapon_spawn_point[1]};{weapon_type};{weapon_data[weapon_type]['ammo']};{weapon_data[weapon_type]['reserve_ammo']};{15}", udp=True) # envia uma mensagem para todos os clientes que um novo pickup de arma foi adicionado
+            time.sleep(1) # espera um ciclo de 1 segundo
+            gen_weapon_timer -= 1 # decrementa o timer de geração de armas
 
-            # Remove pickups de armas depois de 10 segundos
-            to_remove = []
-            for weapon_id, weapon_pickup in self.weapon_pickups.items():
-                weapon_pickup.remove_timer -= 5
+            if gen_weapon_timer <= 0:
+                gen_weapon_timer = 5
+                weapon_type = random.randint(0, 3) # gera um tipo de arma aleatório
+                weapon_spawn_point = weapon_spawn_points.pop(0) # remove o primeiro ponto de spawn da lista
+                weapon_spawn_points.append(weapon_spawn_point) # adiciona o ponto de spawn no final da lista
+                remove_timer = 20
+                weapon_id = self.gen_id(self.weapon_pickups.keys()) # gera um ID para o pickup de arma
+                self.weapon_pickups[weapon_id] = ServerWeaponPickupInfo(weapon_id, remove_timer) # cria um novo pickup de arma
+                
+                self.broadcast(f"ADD_WEAPON_PICKUP:{weapon_id};{weapon_spawn_point[0]};{weapon_spawn_point[1]};{weapon_type};{weapon_data[weapon_type]['ammo']};{weapon_data[weapon_type]['reserve_ammo']};{remove_timer}", udp=True) # envia uma mensagem para todos os clientes que um novo pickup de arma foi adicionado
+            
+            for weapon_pickup in list(self.weapon_pickups.values()):
+                weapon_pickup.remove_timer -= 1 # decrementa o timer de remoção do pickup de arma
                 if weapon_pickup.remove_timer <= 0:
-                    self.broadcast(f"REMOVE_WEAPON_PICKUP:{weapon_id}", udp=True) # envia uma mensagem para todos os clientes que o pickup de arma foi removido
-                    to_remove.append(weapon_id)
-
-            for weapon_id in to_remove:
-                self.weapon_pickups.pop(weapon_id, None)
+                    self.broadcast(f"REMOVE_WEAPON_PICKUP:{weapon_pickup.id}", udp=True)
+                    self.weapon_pickups.pop(weapon_pickup.id, None) # remove o pickup de arma da lista de pickups
+# * -------------------------------------------------------------------
 
     def gen_id(self, ids) -> int:
         """ Gera o primeiro ID disponivel. """

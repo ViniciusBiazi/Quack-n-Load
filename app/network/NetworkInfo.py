@@ -1,3 +1,5 @@
+import time
+
 class PlayerInfo:
     def __init__(self, id, nickname=None):
         self.id = id
@@ -30,3 +32,8 @@ class ClientInfo(PlayerInfo):
 
         # comunicaçao do jogo
         self.udp_addr = None
+
+class ServerWeaponPickupInfo:
+    def __init__(self, id, remove_timer):
+        self.id = id
+        self.remove_timer = remove_timer

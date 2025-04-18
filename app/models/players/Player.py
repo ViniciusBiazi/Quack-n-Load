@@ -118,10 +118,15 @@ class Player(PhysicsObject):
             self.coyote_time = 0  # Reseta o tempo de coyote
 
         if btnp(KEY_E):
-            self.try_pickup_weapon()
+            for weapon_id, weapon_pickup in self.weapon_pickup_manager.weapon_pickups.items():
+                if self.entity_collider.check_collision_rect(weapon_pickup.entity_collider):
+                    self.weapon_pickup_manager.pickup_weapon(weapon_id)
+                    break
 
         if btnp(KEY_Q):
-            self.drop_weapon()
+            if self.weapon:
+                self.weapon_pickup_manager.drop_weapon(self.weapon)
+                self.weapon = None
 
     def handle_weapon(self, delta_time):
         self.weapon.update(self.center_x, self.center_y + 2, delta_time)
@@ -166,41 +171,27 @@ class Player(PhysicsObject):
             self.animation_timer = self.ANIMATION_TIMER
             self.sprite = (self.sprite + 1) % len(self.current_animation)
 
+    def pickup_weapon(self, weapon_pickup: WeaponPickup):
+        """ Adiciona uma nova arma ao jogador. """
+        if self.weapon:
+            self.weapon_pickup_manager.drop_weapon(self.weapon)
+            self.weapon = None
+
+        if weapon_pickup.weapon_type == 0:
+            self.weapon = Pistol(self.center_x, self.center_y + 2, projectile_manager=self.projectile_manager) 
+        elif weapon_pickup.weapon_type == 1:
+            self.weapon = Shotgun(self.center_x, self.center_y + 2, projectile_manager=self.projectile_manager)
+        elif weapon_pickup.weapon_type == 2:
+            self.weapon = Rifle(self.center_x, self.center_y + 2, projectile_manager=self.projectile_manager)  
+        elif weapon_pickup.weapon_type == 3:
+            self.weapon = AssaultRifle(self.center_x, self.center_y + 2, projectile_manager=self.projectile_manager)
+
+        self.weapon.ammo = weapon_pickup.ammo
+        self.weapon.reserve_ammo = weapon_pickup.reserve_ammo
+
     def draw(self):
         self.draw_sprite = (*self.current_animation[self.sprite], *self.sprite_flip)  # Sprite atual do jogador
         blt(self.x, self.y, 0, *self.draw_sprite)  # Desenha o sprite do jogador
         
         if self.weapon:
             self.weapon.draw()
-
-    def try_pickup_weapon(self):
-        """ Pega uma arma do WeaponPickupManager. """
-        for weapon_id, weapon_pickup in self.weapon_pickup_manager.weapon_pickups.items():
-            if self.entity_collider.check_collision_rect(weapon_pickup.entity_collider):
-                self.weapon_pickup_manager.try_pickup_weapon(weapon_id)
-                break
-
-    def pickup_weapon(self, weapon_pickup: WeaponPickup):
-        """ Pega uma arma do pickup. """
-        if self.weapon:
-            self.drop_weapon()
-
-        if weapon_pickup.weapon_type == 0: 
-            self.weapon = Pistol(self.center_x, self.center_y, projectile_manager=self.projectile_manager)
-        elif weapon_pickup.weapon_type == 1:
-            self.weapon = Shotgun(self.center_x, self.center_y, projectile_manager=self.projectile_manager)
-        elif weapon_pickup.weapon_type == 2:
-            self.weapon = Rifle(self.center_x, self.center_y, projectile_manager=self.projectile_manager)
-        elif weapon_pickup.weapon_type == 3:
-            self.weapon = AssaultRifle(self.center_x, self.center_y, projectile_manager=self.projectile_manager)
-
-        self.weapon.ammo = weapon_pickup.ammo
-        self.weapon.reserve_ammo = weapon_pickup.reserve_ammo
-
-        self.weapon_pickup_manager.remove_weapon_pickup(weapon_pickup.id)
-
-    def drop_weapon(self):
-        """ Deixa a arma no chão. """
-        if self.weapon:
-            self.weapon_pickup_manager.drop_weapon(self.weapon)
-            self.weapon = None

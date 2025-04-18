@@ -10,6 +10,7 @@ from models.players.PlayerGui import PlayerGui
 
 from models.core.PhysicsManager import PhysicsManager
 from models.weapon_pickup.WeaponPickupManager import WeaponPickupManager
+from models.weapon_pickup.WeaponPickup import WeaponPickup
 from models.projectiles.ProjectileManager import ProjectileManager
 
 class PlayerManager:
@@ -109,14 +110,7 @@ class PlayerManager:
         if self.player.weapon:
             player_data += f";{self.player.weapon.x};{self.player.weapon.y};{self.player.weapon.draw_sprite};{self.player.weapon.weapon_rotation}"
 
-        return player_data
-    
-    def pickup_weapon(self, weapon_pickup_id):
-        """ Tenta pegar uma arma do pickup. """
-        weapon_pickup = self.weapon_pickup_manager.weapon_pickups.pop(weapon_pickup_id, None)
-        if weapon_pickup:
-            self.player.pickup_weapon(weapon_pickup)
-            self.physics_manager.remove_physics_object(weapon_pickup)
+        return player_data       
     
     def receive_damage(self, damage):
         """ Recebe dano do jogador remoto. """

@@ -1,4 +1,4 @@
-from network.ClientInfo import PlayerInfo
+from network.NetworkInfo import PlayerInfo
 from multiprocessing import Process, Queue
 
 class GameState:

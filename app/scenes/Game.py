@@ -87,7 +87,8 @@ class Game:
                 _, projectile_id = data.split(":")
 
                 self.projectile_manager.remove_projectile(int(projectile_id))
-
+        # * -------------------------------------------------------------------
+        # * Comandos sobre os pickups de armas
             elif data.startswith("ADD_WEAPON_PICKUP:"):
                 _, info = data.split(":")
                 id, x, y, weapon_type, ammo, reserve_ammo, remove_timer = info.split(";")
@@ -99,24 +100,26 @@ class Game:
                 ammo = int(ammo)
                 reserve_ammo = int(reserve_ammo)
                 remove_timer = int(remove_timer)
-
+                print(f"ADD_WEAPON_PICKUP: {id}, {x}, {y}, {weapon_type}, {ammo}, {reserve_ammo}, {remove_timer}")
                 self.weapon_pickup_manager.add_weapon_pickup(id, x, y, weapon_type, ammo, reserve_ammo, remove_timer)
 
             elif data.startswith("REMOVE_WEAPON_PICKUP:"):
                 _, weapon_pickup_id = data.split(":")
-                self.weapon_pickup_manager.remove_weapon_pickup(int(weapon_pickup_id))
-            
-            elif data.startswith("PICKUP_WEAPON:"):
-                _, info = data.split(":")
-                player_id, weapon_pickup_id = info.split(";")
 
-                player_id = int(player_id)
                 weapon_pickup_id = int(weapon_pickup_id)
 
-                if player_id == self.game_state.player_id:
-                    self.player_manager.pickup_weapon(weapon_pickup_id)
-                else:
+                self.weapon_pickup_manager.remove_weapon_pickup(weapon_pickup_id)
+            
+            elif data.startswith("PICKUP_WEAPON:"):
+                _, weapon_pickup_id = data.split(":")
+
+                weapon_pickup_id = int(weapon_pickup_id)
+                
+                if weapon_pickup_id in self.weapon_pickup_manager.weapon_pickups.keys():
+                    weapon_pickup = self.weapon_pickup_manager.weapon_pickups[weapon_pickup_id]
+                    self.player_manager.player.pickup_weapon(weapon_pickup)
                     self.weapon_pickup_manager.remove_weapon_pickup(weapon_pickup_id)
+        # * -------------------------------------------------------------------
 
             elif data.startswith("RECEIVE_DAMAGE:"):
                 _, damage = data.split(":")
@@ -124,6 +127,8 @@ class Game:
                 damage = int(damage)
                 
                 self.player_manager.receive_damage(damage)
+
+# "ADD_WEAPON_PICKUP:{weapon_id};{weapon_spawn_point[0]};{weapon_spawn_point[1]};{weapon_type};{weapon_data[weapon_type]['ammo']};{weapon_data[weapon_type]['reserve_ammo']};{remove_timer}"
 
         self.physics_manager.update_physics_manager(delta_time)
 

@@ -5,7 +5,7 @@ from utils.GameState import GameState
 
 from multiprocessing import Process, Queue
 from network.Client import start_client_process
-from network.ClientInfo import PlayerInfo
+from network.NetworkInfo import PlayerInfo
 
 class JoinMenu:
     def __init__(self, game_state: GameState):

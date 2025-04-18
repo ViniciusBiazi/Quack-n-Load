@@ -4,7 +4,7 @@ from multiprocessing import Process, Queue
 from queue import Empty
 
 from utils.GameState import GameState
-from network.ClientInfo import PlayerInfo
+from network.NetworkInfo import PlayerInfo
 from network.Server import start_server_process
 from network.Client import start_client_process
 

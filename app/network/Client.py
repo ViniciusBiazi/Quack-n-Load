@@ -4,7 +4,7 @@ import time
 import os
 from multiprocessing import Queue
 
-from network.ClientInfo import PlayerInfo
+from network.NetworkInfo import PlayerInfo
 
 class Client:
     def __init__(self, client_to_game_queue: Queue, game_to_client_queue: Queue):
@@ -141,7 +141,8 @@ class Client:
 
                 elif message.startswith("REMOVE_PROJECTILE:"):
                     self.client_to_game_queue.put(message)
-
+            # * -------------------------------------------------------------------
+            # * Comandos sobre os pickups de armas
                 elif message.startswith("ADD_WEAPON_PICKUP:"):
                     self.client_to_game_queue.put(message)
 
@@ -150,6 +151,7 @@ class Client:
 
                 elif message.startswith("PICKUP_WEAPON:"):
                     self.client_to_game_queue.put(message)
+            # * -------------------------------------------------------------------
 
                 elif message.startswith("RECEIVE_DAMAGE:"):
                     self.client_to_game_queue.put(message)
@@ -210,13 +212,14 @@ def start_client_process(host, tcp_port, client_to_game_queue: Queue, game_to_cl
 
             elif message.startswith("REMOVE_PROJECTILE:"):
                 client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
-            
-            elif message.startswith("TRY_PICKUP_WEAPON:"):
+        # * -------------------------------------------------------------------
+        # * Comandos sobre os pickups de armas
+            elif message.startswith("PICKUP_WEAPON:"):
                 client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
             
             elif message.startswith("DROP_WEAPON:"):
                 client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
-            
+        # * -------------------------------------------------------------------
             elif message.startswith("DEAL_DAMAGE:"):
                 client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
         

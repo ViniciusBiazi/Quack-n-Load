@@ -2,7 +2,7 @@ import pyxel
 from pyxel import *
 
 from utils.GameState import GameState
-from network.ClientInfo import PlayerInfo
+from network.NetworkInfo import PlayerInfo
 
 class Lobby:
     def __init__(self, game_state: GameState):
