@@ -407,7 +407,7 @@ def start_server_process(server_to_game_queue: Queue, game_to_server_queue: Queu
         # Process incoming data from the server
         while not server.game_to_server_queue.empty():
             message = server.game_to_server_queue.get()
-            print(f"Received from game: {message}")
+            # print(f"Received from game: {message}")
 
             if message.startswith("STOP_SERVER"):
                 server.broadcast("SERVER_STOPPED|")

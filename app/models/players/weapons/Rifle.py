@@ -12,7 +12,7 @@ class Rifle(Weapon):
 
         # parametros do projetil
         self.projectile_speed = 700
-        self.projectile_damage = 20
+        self.projectile_damage = 50
 
     def update(self, x, y, delta_time):
         # Atualiza a pistola com a lógica da classe base Gun

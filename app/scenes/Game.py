@@ -112,7 +112,7 @@ class Game:
                 ammo = int(ammo)
                 reserve_ammo = int(reserve_ammo)
                 remove_timer = int(remove_timer)
-                print(f"ADD_WEAPON_PICKUP: {id}, {x}, {y}, {weapon_type}, {ammo}, {reserve_ammo}, {remove_timer}")
+                # print(f"ADD_WEAPON_PICKUP: {id}, {x}, {y}, {weapon_type}, {ammo}, {reserve_ammo}, {remove_timer}")
                 self.weapon_pickup_manager.add_weapon_pickup(id, x, y, weapon_type, ammo, reserve_ammo, remove_timer)
 
             elif data.startswith("REMOVE_WEAPON_PICKUP:"):
