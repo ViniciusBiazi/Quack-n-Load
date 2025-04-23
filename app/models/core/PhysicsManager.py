@@ -98,3 +98,7 @@ class PhysicsManager:
                 physics_object.set_position(wall.x - physics_object.width, physics_object.y)
                 physics_object.last_wall = wall
                 return
+            
+    def reset_physics_manager(self):
+        """ Reseta o gerenciador de física, limpando as listas de objetos físicos, paredes e chão. """
+        self.physics_objects.clear()

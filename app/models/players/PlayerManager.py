@@ -33,30 +33,25 @@ class PlayerManager:
         if self.player:
             self.player.update_player(delta_time)
 
-        for projectile_id, projectile in self.projectile_manager.projectiles.items():
-            for remote_id, remote_player in self.remote_players.items():
+        for projectile_id, projectile in list(self.projectile_manager.projectiles.items()):
+            for remote_id, remote_player in list(self.remote_players.items()):
                 if projectile.collider.check_collision_rect(remote_player.entity_collider):
                     # Se o projétil colidir com um jogador remoto, remova o projétil
-                    self.game_state.game_to_client_queue.put(f"DEAL_DAMAGE:{remote_id};{projectile.damage}")  # Envia a mensagem para o cliente
-                    self.projectile_manager.to_remove.append(projectile_id)  # Adiciona o projétil à lista de remoção
+                    self.game_state.game_to_client_queue.put(f"DEAL_DAMAGE:{self.game_state.player_id};{remote_id};{projectile_id}")  # Envia a mensagem para o cliente
+                    self.projectile_manager.projectiles.pop(projectile_id, None)
                     break
 
-        to_remove = []
-        for id, dead_player in self.dead_players.items():
+        for id, dead_player in list(self.dead_players.items()):
             dead_player.update_dead_player(delta_time)
 
-            if dead_player.on_ground and dead_player in self.physics_manager.physics_objects:
+            if dead_player.on_ground:
                 # Se o jogador morto estiver no chão, remova-o da lista de objetos físicos
                 self.physics_manager.remove_physics_object(dead_player)
 
             if dead_player.remove_timer <= 0:
                 # Remove o jogador morto da lista de objetos físicos
                 self.physics_manager.remove_physics_object(dead_player)
-                to_remove.append(id)
-
-        for id in to_remove:
-            # Remove o jogador morto da lista de jogadores mortos
-            self.dead_players.pop(id, None)
+                self.dead_players.pop(id, None)
 
     def add_player(self, x, y, player_id):
         """ Adiciona um novo jogador expecificamente o jogador local. """
@@ -72,36 +67,25 @@ class PlayerManager:
 
     def update_remote_player(self, player_id, x, y, sprite, weapon=None):
         """ Atualiza o estado do jogador remoto. """
-        self.remote_players[player_id].update_remote_player(x, y, sprite, weapon)
+        remote_player = self.remote_players.get(player_id, None)
 
-    def kill_player(self):
-        """ Adiciona o jogador local à lista de jogadores mortos. """
-        if self.player:
-            dead_player = DeadPlayer(self.player.x, self.player.y, player_id=self.player.id, direction=not self.player.direction)
-            self.dead_players[self.player.id] = dead_player
+        if remote_player:
+            remote_player.update_remote_player(x, y, sprite, weapon)
 
-            # Remove o jogador da lista de objetos físicos
-            self.physics_manager.remove_physics_object(self.player)
-            self.physics_manager.add_physics_object(dead_player)
-
-            # Remove o jogador local
+    def kill_player(self, player_id):
+        if player_id == self.game_state.player_id:
+            player = self.player
+            self.physics_manager.remove_physics_object(player)
             self.player = None
             self.player_gui = None
+        else:
+            player = self.remote_players.pop(player_id, None)
 
-    def kill_remote_player(self, player_id):
-        """ Adiciona o jogador remoto à lista de jogadores mortos. """
+        if player:
+            dead_player = DeadPlayer(player.x, player.y, player_id=player.id, direction=not player.direction)
+            self.dead_players[player.id] = dead_player
 
-        remote_player = self.remote_players[player_id]
-
-        dead_player = DeadPlayer(remote_player.x, remote_player.y, player_skin=remote_player.player_skin, direction=not remote_player.direction)
-        self.dead_players.append(dead_player)
-
-        # Remove o jogador remoto da lista de objetos físicos
-        self.physics_manager.add_physics_object(dead_player)
-
-        # Remove o jogador remoto
-        del self.remote_players[player_id]
-        return
+            self.physics_manager.add_physics_object(dead_player)
 
     def get_player_data(self):
         """ Retorna os dados do jogador local. """
@@ -117,7 +101,7 @@ class PlayerManager:
         if self.player:
             self.player.health -= damage
             if self.player.health <= 0:
-                self.kill_player()
+                self.game_state.game_to_client_queue.put(f"KILL_PLAYER:{self.player.id}")  # Envia a mensagem para o cliente
 
     def draw(self):
         """ Desenha todos os jogadores e jogadores mortos na tela. """
@@ -127,7 +111,13 @@ class PlayerManager:
 
         for remote_player in self.remote_players.values():
             remote_player.draw()
-            rectb(remote_player.entity_collider.x, remote_player.entity_collider.y, remote_player.entity_collider.width, remote_player.entity_collider.height, 0)  # Desenha o retângulo de colisão do jogador remoto
 
         for dead_player in self.dead_players.values():
             dead_player.draw()
+
+    def reset_player_manager(self):
+        """ Reseta o gerenciador de jogadores. """
+        self.player = None
+        self.player_gui = None
+        self.remote_players.clear()
+        self.dead_players.clear()

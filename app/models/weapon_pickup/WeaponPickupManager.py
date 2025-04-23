@@ -40,3 +40,7 @@ class WeaponPickupManager:
     def draw(self):
         for pickup in self.weapon_pickups.values():
             pickup.draw()
+
+    def reset_weapon_pickup_manager(self):
+        """ Reseta o gerenciador de pickups de armas """
+        self.weapon_pickups.clear()

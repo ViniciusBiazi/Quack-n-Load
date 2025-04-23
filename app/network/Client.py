@@ -117,6 +117,9 @@ class Client:
                     elif message.startswith("ADD_GAME_PLAYER:"):
                         self.client_to_game_queue.put(message) # Send the player update to the game process
 
+                    elif message.startswith("GAME_OVER"):
+                        self.client_to_game_queue.put("GAME_OVER")
+                        
             except socket.error as e:
                 print(f"Error receiving data: {e}")
                 break
@@ -136,10 +139,18 @@ class Client:
                 if message.startswith("UPDATE_PLAYER:"):
                     self.client_to_game_queue.put(message) # Send the player update to the game process
 
+            # * -------------------------------------------------------------------
+            # * Comandos sobre os projetis
                 elif message.startswith("ADD_PROJECTILE:"):
                     self.client_to_game_queue.put(message)
 
                 elif message.startswith("REMOVE_PROJECTILE:"):
+                    self.client_to_game_queue.put(message)
+
+                elif message.startswith("RECEIVE_DAMAGE:"):
+                    self.client_to_game_queue.put(message)
+
+                elif message.startswith("KILL_PLAYER:"):
                     self.client_to_game_queue.put(message)
             # * -------------------------------------------------------------------
             # * Comandos sobre os pickups de armas
@@ -152,9 +163,6 @@ class Client:
                 elif message.startswith("PICKUP_WEAPON:"):
                     self.client_to_game_queue.put(message)
             # * -------------------------------------------------------------------
-
-                elif message.startswith("RECEIVE_DAMAGE:"):
-                    self.client_to_game_queue.put(message)
 
             except socket.error as e:
                 print(f"Error receiving udp data: {e}")
@@ -206,11 +214,15 @@ def start_client_process(host, tcp_port, client_to_game_queue: Queue, game_to_cl
 
             elif message.startswith("UPDATE_PLAYER:"):
                 client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
-
+        # * -------------------------------------------------------------------
+        # * Comandos sobre os projetis
             elif message.startswith("ADD_PROJECTILE:"):
                 client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
+            
+            elif message.startswith("DEAL_DAMAGE:"):
+                client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
 
-            elif message.startswith("REMOVE_PROJECTILE:"):
+            elif message.startswith("KILL_PLAYER:"):
                 client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
         # * -------------------------------------------------------------------
         # * Comandos sobre os pickups de armas
@@ -220,8 +232,6 @@ def start_client_process(host, tcp_port, client_to_game_queue: Queue, game_to_cl
             elif message.startswith("DROP_WEAPON:"):
                 client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
         # * -------------------------------------------------------------------
-            elif message.startswith("DEAL_DAMAGE:"):
-                client.udp_socket.sendto(message.encode(), (client.host, client.udp_port))
         
         elapsed_time = time.monotonic() - start_time
         sleep_time = tick_duration - elapsed_time

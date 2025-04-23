@@ -6,8 +6,8 @@ import os
 import random
 
 from network.NetworkInfo import ClientInfo
-from models.projectiles.Projectile import Projectile
 
+from network.NetworkInfo import ServerProjectileInfo
 from network.NetworkInfo import ServerWeaponPickupInfo
 
 class Server:
@@ -18,8 +18,8 @@ class Server:
         self.game_to_server_queue = game_to_server_queue
 
         self.clients: dict[int, ClientInfo] = {} # dicionário de clientes conectados
-        self.projectiles: dict[int, Projectile] = {} # dicionário de projéteis conectados
 
+        self.projectiles: dict[int, ServerProjectileInfo] = {} # dicionário de projéteis conectados
         self.weapon_pickups: dict[int, ServerWeaponPickupInfo] = {} # dicionário de pickups de armas conectados
 
         self.max_clients = max_clients # número máximo de clientes permitidos
@@ -146,6 +146,7 @@ class Server:
                         with self.lock:
                             for id in self.clients.keys():
                                 x, y = self.player_spawn_points.pop()
+                                self.player_spawn_points.append((x, y)) # adiciona o ponto de spawn no final da lista
                                 
                                 client.tcp_socket.sendall(f"ADD_GAME_PLAYER:{id};{x};{y}|".encode())
 
@@ -189,6 +190,9 @@ class Server:
 
                         self.broadcast(f"ADD_PLAYER:{client_id}|", exclude_client_id=client_id) # envia uma mensagem para todos os clientes que um novo player foi adicionado
 
+                if not self.in_game:
+                    continue
+                
                 elif message.startswith("UPDATE_PLAYER:"):
                     _, info = message.split(":")
                     client_id = info.split(";")[0]
@@ -196,9 +200,10 @@ class Server:
                     client_id = int(client_id)
 
                     self.broadcast(message, exclude_client_id=client_id, udp=True)
-
+        
+            # * -------------------------------------------------------------------
+            # * Comandos sobre os projéteis
                 elif message.startswith("ADD_PROJECTILE:"):
-                    print("teste")
                     _, info = message.split(":")
                     client_id, x, y, angle, speed, damage, projectile_type = info.split(";")
 
@@ -206,23 +211,41 @@ class Server:
                     projectile_id = self.gen_id(self.projectiles.keys())
 
                     # Cria um novo projétil
-                    projectile = Projectile(projectile_id, float(x), float(y), float(angle), float(speed), int(damage), int(projectile_type))
+                    projectile = ServerProjectileInfo(projectile_id, damage) # cria um novo projétil
+
                     self.projectiles[projectile_id] = projectile # adiciona o projétil à lista de projéteis
                     self.broadcast(f"ADD_PROJECTILE:{client_id};{projectile_id};{x};{y};{angle};{speed};{damage};{projectile_type}", udp=True)
-                
-                elif message.startswith("REMOVE_PROJECTILE:"):
+
+                elif message.startswith("DEAL_DAMAGE:"):
                     _, info = message.split(":")
-                    client_id, projectile_id = info.split(";")
+                    client_id, other_id, projectile_id = info.split(";")
 
                     client_id = int(client_id)
+                    other_id = int(other_id)
                     projectile_id = int(projectile_id)
+                    damage = self.projectiles[projectile_id].damage # pega o dano do projétil
 
-                    if projectile_id in self.projectiles.keys():
-                        self.projectiles.pop(projectile_id, None)
-                        self.broadcast(f"REMOVE_PROJECTILE:{projectile_id}", exclude_client_id=client_id, udp=True) # envia uma mensagem para todos os clientes que o projétil foi removido
-            
+                    self.udp_socket.sendto(f"RECEIVE_DAMAGE:{damage}".encode(), self.clients[other_id].udp_addr)
+                    self.broadcast(f"REMOVE_PROJECTILE:{projectile_id}", exclude_client_id=client_id, udp=True) # remove o projétil do cliente
+           
+                elif message.startswith("KILL_PLAYER:"):
+                    _, client_id = message.split(":")
+
+                    client_id = int(client_id)
+                    self.clients[client_id].dead = True
+
+                    qtd_alive = 0
+                    for client in self.clients.values():
+                        if not client.dead:
+                            qtd_alive += 1
+                    
+                    if qtd_alive > 1:
+                        self.broadcast(f"KILL_PLAYER:{client_id}", udp=True)
+                    else:
+                        self.broadcast(f"GAME_OVER|")
+                        self.reset_game() # reinicia o jogo
             # * -------------------------------------------------------------------
-            # * Comandos sobre os pickups de armas
+            # * Comandos sobre os pickups de armas  
                 elif message.startswith("PICKUP_WEAPON:"):
                     _, info = message.split(":")
                     client_id, weapon_pickup_id = info.split(";")
@@ -250,14 +273,6 @@ class Server:
                     
                     self.broadcast(f"ADD_WEAPON_PICKUP:{weapon_id};{x};{y};{weapon_type};{ammo};{reserve_ammo};{remove_timer}", udp=True) # envia uma mensagem para todos os clientes que um novo pickup de arma foi adicionado
             # * -------------------------------------------------------------------
-                elif message.startswith("DEAL_DAMAGE:"):
-                    _, info = message.split(":")
-                    client_id, damage = info.split(";")
-
-                    client_id = int(client_id)
-                    damage = int(damage)
-
-                    self.udp_socket.sendto(f"RECEIVE_DAMAGE:{damage}".encode(), self.clients[client_id].udp_addr)
 
             except Exception as e:
                 print(f"Error handling game data: {e}")
@@ -319,6 +334,12 @@ class Server:
         threading.Thread(target=self.handle_weapon_pickup, daemon=True).start() # cria uma nova thread para gerar pickups de armas
         self.broadcast("START_GAME|")
 
+    def reset_game(self):
+        self.in_game = False
+        self.projectiles.clear()
+        self.weapon_pickups.clear()
+        for client in self.clients.values():
+            client.dead = False
 # * -------------------------------------------------------------------
 # TODO rever essa logica ( VER SOBRE LOCKS )
     def handle_weapon_pickup(self): # thread para gerar e remover por tempo os pickups

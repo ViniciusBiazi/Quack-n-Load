@@ -5,6 +5,7 @@ class PlayerInfo:
         self.id = id
         self.nickname = nickname if nickname else f"Player {id}"
         self.ping = 0
+        self.dead = False
 
         # dados do jogador
         self.x = 0
@@ -37,3 +38,8 @@ class ServerWeaponPickupInfo:
     def __init__(self, id, remove_timer):
         self.id = id
         self.remove_timer = remove_timer
+
+class ServerProjectileInfo:
+    def __init__(self, id, damage):
+        self.id = id
+        self.damage = damage

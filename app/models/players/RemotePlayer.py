@@ -24,6 +24,11 @@ class RemotePlayer(Entity):
 
         self.sprite = sprite
 
+        if sprite[2] > 0:
+            self.direction = False
+        else:
+            self.direction = True
+
         if weapon:
             self.weapon = RemoteWeapon()
             self.weapon.x = weapon[0]
