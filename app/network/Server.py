@@ -363,15 +363,16 @@ class Server:
             gen_weapon_timer -= 1 # decrementa o timer de geração de armas
 
             if gen_weapon_timer <= 0:
-                gen_weapon_timer = 5
-                weapon_type = random.randint(0, 3) # gera um tipo de arma aleatório
-                weapon_spawn_point = weapon_spawn_points.pop(0) # remove o primeiro ponto de spawn da lista
-                weapon_spawn_points.append(weapon_spawn_point) # adiciona o ponto de spawn no final da lista
-                remove_timer = 20
-                weapon_id = self.gen_id(self.weapon_pickups.keys()) # gera um ID para o pickup de arma
-                self.weapon_pickups[weapon_id] = ServerWeaponPickupInfo(weapon_id, remove_timer) # cria um novo pickup de arma
-                
-                self.broadcast(f"ADD_WEAPON_PICKUP:{weapon_id};{weapon_spawn_point[0]};{weapon_spawn_point[1]};{weapon_type};{weapon_data[weapon_type]['ammo']};{weapon_data[weapon_type]['reserve_ammo']};{remove_timer}", udp=True) # envia uma mensagem para todos os clientes que um novo pickup de arma foi adicionado
+                for i in range(len(self.clients)):
+                    gen_weapon_timer = 5
+                    weapon_type = random.randint(0, 3) # gera um tipo de arma aleatório
+                    weapon_spawn_point = weapon_spawn_points.pop(0) # remove o primeiro ponto de spawn da lista
+                    weapon_spawn_points.append(weapon_spawn_point) # adiciona o ponto de spawn no final da lista
+                    remove_timer = 10
+                    weapon_id = self.gen_id(self.weapon_pickups.keys()) # gera um ID para o pickup de arma
+                    self.weapon_pickups[weapon_id] = ServerWeaponPickupInfo(weapon_id, remove_timer) # cria um novo pickup de arma
+                    
+                    self.broadcast(f"ADD_WEAPON_PICKUP:{weapon_id};{weapon_spawn_point[0]};{weapon_spawn_point[1]};{weapon_type};{weapon_data[weapon_type]['ammo']};{weapon_data[weapon_type]['reserve_ammo']};{remove_timer}", udp=True) # envia uma mensagem para todos os clientes que um novo pickup de arma foi adicionado
             
             for weapon_pickup in list(self.weapon_pickups.values()):
                 weapon_pickup.remove_timer -= 1 # decrementa o timer de remoção do pickup de arma

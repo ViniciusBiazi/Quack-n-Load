@@ -35,7 +35,7 @@ class WeaponPickupManager:
         self.game_state.game_to_client_queue.put(f"PICKUP_WEAPON:{self.game_state.player_id};{weapon_pickup_id}")
 
     def drop_weapon(self, weapon: Weapon):
-        self.game_state.game_to_client_queue.put(f"DROP_WEAPON:{weapon.center_x};{weapon.center_y};{weapon.weapon_type};{weapon.ammo};{weapon.reserve_ammo};{10}")
+        self.game_state.game_to_client_queue.put(f"DROP_WEAPON:{weapon.center_x};{weapon.center_y};{weapon.weapon_type};{weapon.ammo};{weapon.reserve_ammo};{5}")
 
     def draw(self):
         for pickup in self.weapon_pickups.values():
