@@ -3,7 +3,7 @@ from multiprocessing import Process, Queue
 
 class GameState:
     def __init__(self):
-        self.states = ["main_menu", "join_menu", "host_menu", "lobby", "game"]
+        self.states = ["main_menu", "join_menu", "host_menu", "lobby", "game", "game_over"]
         self.current_state = "main_menu"
 
         self.player_id: int = None
@@ -13,6 +13,7 @@ class GameState:
         self.tcp_port = None
 
         self.is_host = False
+        self.winner: int = None
 
         self.server_process: Process = None
         self.server_to_game_queue: Queue = None

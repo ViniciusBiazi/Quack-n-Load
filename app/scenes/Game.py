@@ -139,11 +139,7 @@ class Game:
 
                 player_id = int(player_id)
 
-                cls(0)
-                text(40, 20, "Game Over", 7)
-                text(40, 40, f"Player {player_id} wins!", 7)
-
-                time.sleep(3)
+                self.game_state.winner = player_id
 
                 self.reset_all()
                 return
@@ -160,7 +156,7 @@ class Game:
         self.projectile_manager.update_projectile_manager(delta_time)
 
         if self.player_manager.player:
-            self.game_state.game_to_client_queue.put(f"UPDATE_PLAYER:{self.player_manager.get_player_data()}")
+            self.game_state.game_to_client_queue.put(f"UPDATE_PLAYER:{self.player_manager.get_player_data()}")    
 
     def draw(self):
         self.world.draw()
@@ -177,4 +173,4 @@ class Game:
         self.weapon_pickup_manager.reset_weapon_pickup_manager()
         self.physics_manager.reset_physics_manager()
 
-        self.game_state.set_game_state("lobby")
+        self.game_state.set_game_state("game_over")
