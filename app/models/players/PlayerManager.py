@@ -96,12 +96,12 @@ class PlayerManager:
 
         return player_data       
     
-    def receive_damage(self, damage):
+    def receive_damage(self, player_id, damage):
         """ Recebe dano do jogador remoto. """
         if self.player:
             self.player.health -= damage
             if self.player.health <= 0:
-                self.game_state.game_to_client_queue.put(f"KILL_PLAYER:{self.player.id}")  # Envia a mensagem para o cliente
+                self.game_state.game_to_client_queue.put(f"KILL_PLAYER:{self.player.id};{player_id}")  # Envia a mensagem para o cliente
 
     def draw(self):
         """ Desenha todos os jogadores e jogadores mortos na tela. """

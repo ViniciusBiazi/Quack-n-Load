@@ -87,11 +87,13 @@ class Game:
                 self.projectile_manager.remove_projectile(int(projectile_id))
 
             elif data.startswith("RECEIVE_DAMAGE:"):
-                _, damage = data.split(":")
+                _, info = data.split(":")
+                player_id, damage = info.split(";")
 
+                player_id = int(player_id)
                 damage = int(damage)
                 
-                self.player_manager.receive_damage(damage)
+                self.player_manager.receive_damage(player_id, damage)
 
             elif data.startswith("KILL_PLAYER:"):
                 _, player_id = data.split(":")
@@ -132,7 +134,17 @@ class Game:
                     self.player_manager.player.pickup_weapon(weapon_pickup)
                     self.weapon_pickup_manager.remove_weapon_pickup(weapon_pickup_id)
         # * -------------------------------------------------------------------
-            elif data.startswith("GAME_OVER"):
+            elif data.startswith("GAME_OVER:"):
+                _, player_id = data.split(":")
+
+                player_id = int(player_id)
+
+                cls(0)
+                text(40, 20, "Game Over", 7)
+                text(40, 40, f"Player {player_id} wins!", 7)
+
+                time.sleep(3)
+
                 self.reset_all()
                 return
 

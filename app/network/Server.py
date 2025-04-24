@@ -5,8 +5,7 @@ from multiprocessing import Queue
 import os
 import random
 
-from network.NetworkInfo import ClientInfo
-
+from network.NetworkInfo import ServerPlayerInfo
 from network.NetworkInfo import ServerProjectileInfo
 from network.NetworkInfo import ServerWeaponPickupInfo
 
@@ -17,8 +16,7 @@ class Server:
         self.server_to_game_queue = server_to_game_queue 
         self.game_to_server_queue = game_to_server_queue
 
-        self.clients: dict[int, ClientInfo] = {} # dicionário de clientes conectados
-
+        self.clients: dict[int, ServerPlayerInfo] = {} # dicionário de clientes conectados
         self.projectiles: dict[int, ServerProjectileInfo] = {} # dicionário de projéteis conectados
         self.weapon_pickups: dict[int, ServerWeaponPickupInfo] = {} # dicionário de pickups de armas conectados
 
@@ -93,7 +91,7 @@ class Server:
                     
                     client_id = self.gen_id(self.clients.keys())
                     
-                    self.clients[client_id] = ClientInfo(client_id, client_tcp_addr, client_tcp_socket) # cria um novo ClientInfo
+                    self.clients[client_id] = ServerPlayerInfo(client_id, client_tcp_addr, client_tcp_socket) # cria um novo ServerPlayerInfo
 
                 threading.Thread(target=self.listen_tcp_data, args=(client_id,), daemon=True).start() # cria uma nova thread para lidar com o cliente TCP
 
@@ -225,24 +223,27 @@ class Server:
                     projectile_id = int(projectile_id)
                     damage = self.projectiles[projectile_id].damage # pega o dano do projétil
 
-                    self.udp_socket.sendto(f"RECEIVE_DAMAGE:{damage}".encode(), self.clients[other_id].udp_addr)
+                    self.udp_socket.sendto(f"RECEIVE_DAMAGE:{client_id};{damage}".encode(), self.clients[other_id].udp_addr)
                     self.broadcast(f"REMOVE_PROJECTILE:{projectile_id}", exclude_client_id=client_id, udp=True) # remove o projétil do cliente
            
                 elif message.startswith("KILL_PLAYER:"):
-                    _, client_id = message.split(":")
+                    _, info = message.split(":")
+                    client_id, other_client_id = info.split(";")
 
                     client_id = int(client_id)
-                    self.clients[client_id].dead = True
+                    other_client_id = int(other_client_id)
 
-                    qtd_alive = 0
-                    for client in self.clients.values():
-                        if not client.dead:
-                            qtd_alive += 1
+                    self.clients[client_id].dead = True
+                    self.clients[client_id].deaths += 1
+                    self.clients[other_client_id].kills += 1
+
+                    alive_players = [client for client in self.clients.values() if not client.dead] # pega todos os jogadores vivos
+                    qtd_alive = len(alive_players) # conta quantos jogadores estão vivos
                     
                     if qtd_alive > 1:
                         self.broadcast(f"KILL_PLAYER:{client_id}", udp=True)
                     else:
-                        self.broadcast(f"GAME_OVER|")
+                        self.broadcast(f"GAME_OVER:{alive_players[0].id}") # envia uma mensagem para todos os clientes que o jogo acabou
                         self.reset_game() # reinicia o jogo
             # * -------------------------------------------------------------------
             # * Comandos sobre os pickups de armas  

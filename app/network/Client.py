@@ -117,8 +117,8 @@ class Client:
                     elif message.startswith("ADD_GAME_PLAYER:"):
                         self.client_to_game_queue.put(message) # Send the player update to the game process
 
-                    elif message.startswith("GAME_OVER"):
-                        self.client_to_game_queue.put("GAME_OVER")
+                    elif message.startswith("GAME_OVER:"):
+                        self.client_to_game_queue.put(message)
                         
             except socket.error as e:
                 print(f"Error receiving data: {e}")
