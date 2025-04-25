@@ -12,7 +12,7 @@ from scenes.GameOver import GameOver
 
 class App:
     def __init__(self):
-        init(384, 256, title="Quack'n'Load", fps=120)
+        init(384, 256, title="Quack'n'Load", fps=120, quit_key=KEY_DELETE)
 
         self.game_state = GameState()
 
@@ -46,6 +46,13 @@ class App:
             self.game.update(delta_time=delta_time)
         elif self.game_state.current_state == "game_over":
             self.game_over.update(delta_time=delta_time)
+
+        if btnp(KEY_ESCAPE):
+            if self.game_state.current_state == "main_menu":
+                quit()
+            else:
+                self.game_state.set_game_state("main_menu")
+                self.game_state.reset()
 
     def draw(self):
         cls(0)

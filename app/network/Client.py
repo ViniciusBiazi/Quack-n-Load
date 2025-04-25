@@ -4,11 +4,10 @@ import time
 import os
 from multiprocessing import Queue
 
-from network.NetworkInfo import PlayerInfo
-
 class Client:
-    def __init__(self, client_to_game_queue: Queue, game_to_client_queue: Queue):
+    def __init__(self, client_to_game_queue: Queue, game_to_client_queue: Queue, nick):
         self.client_id = None # Client ID
+        self.nickname = nick
 
         self.game_to_client_queue = game_to_client_queue
         self.client_to_game_queue = client_to_game_queue
@@ -21,8 +20,6 @@ class Client:
         self.udp_socket = None # Client UDP socket
 
         self.connected = False # Flag to check if the client is connected to the server
-
-        self.players: dict[int, PlayerInfo] = {} # Dictionary to store connected players
 
     def connect(self, host, tcp_port):
         self.host = host
@@ -61,7 +58,7 @@ class Client:
 
                     if message.startswith("SERVER_FULL"):
                         self.client_to_game_queue.put("SERVER_FULL")
-                        self.disconnect()
+                        break
 
                     elif message.startswith("GAME_CONNECTION:"):
                         _, info = message.split(":")
@@ -69,46 +66,31 @@ class Client:
 
                         self.client_id = int(client_id)
                         self.udp_port = int(udp_port)
-                        self.players[self.client_id] = PlayerInfo(self.client_id) # Add the player to the players dictionary
 
-                        self.client_to_game_queue.put(f"PLAYER_ID:{client_id}") # Send the client ID to the game process
+                        if self.nickname == "":
+                            self.nickname = f"Player {self.client_id}"
+
+                        self.client_to_game_queue.put(f"PLAYER_ID:{client_id};{self.nickname}") # Send the client ID to the game process
 
                         # envia um HELLO para o servidor UDP 
-                        self.udp_socket.sendto(f"GAME_CONNECTION:{self.client_id}".encode(), (self.host, self.udp_port))
+                        self.udp_socket.sendto(f"GAME_CONNECTION:{self.client_id};{self.nickname}".encode(), (self.host, self.udp_port))
                     
                     elif message.startswith("PING:"):
                         # Respond to the server's PING
                         self.tcp_socket.sendall(message.encode())
 
-                    elif message.startswith("UPDATE_PING:"):
-                        _, info = message.split(":")
-                        client_id, ping = info.split(";")
-
-                        client_id = int(client_id)
-                        ping = int(ping)
-
-                        if client_id in self.players.keys():
-                            self.players[client_id].ping = ping
-                            self.client_to_game_queue.put(f"UPDATE_PING:{client_id};{ping}") # Send the updated ping to the game process
+                    elif message.startswith("UPDATE_LOBBY_DATA:"):
+                        self.client_to_game_queue.put(message) # Send the player update to the game process
 
                     elif message.startswith("ADD_PLAYER:"):
-                        _, client_id = message.split(":")
-
-                        client_id = int(client_id)
-                        self.players[client_id] = PlayerInfo(client_id)
-                        self.client_to_game_queue.put(f"ADD_PLAYER:{client_id}") # Send the new player ID to the game process
+                        self.client_to_game_queue.put(message) # Send the player update to the game process
                     
                     elif message.startswith("REMOVE_PLAYER:"):
-                        _, client_id = message.split(":")
-                        client_id = int(client_id)
-
-                        if client_id in self.players.keys():
-                            del self.players[client_id]
-                            self.client_to_game_queue.put(f"REMOVE_PLAYER:{client_id}")
+                        self.client_to_game_queue.put(message) # Send the player update to the game process
 
                     elif message.startswith("SERVER_STOPPED"):
-                        self.disconnect()
                         self.client_to_game_queue.put("DISCONNECTED")
+                        break
 
                     elif message.startswith("START_GAME"):
                         self.client_to_game_queue.put("START_GAME")
@@ -138,7 +120,6 @@ class Client:
 
                 if message.startswith("UPDATE_PLAYER:"):
                     self.client_to_game_queue.put(message) # Send the player update to the game process
-
             # * -------------------------------------------------------------------
             # * Comandos sobre os projetis
                 elif message.startswith("ADD_PROJECTILE:"):
@@ -186,10 +167,9 @@ class Client:
             self.udp_port = None
             self.host = None
             self.tcp_port = None
-            self.players.clear()
 
-def start_client_process(host, tcp_port, client_to_game_queue: Queue, game_to_client_queue: Queue):
-    client = Client(client_to_game_queue, game_to_client_queue) # Create a new client instance
+def start_client_process(host, tcp_port, client_to_game_queue: Queue, game_to_client_queue: Queue, nick):
+    client = Client(client_to_game_queue, game_to_client_queue, nick) # Create a new client instance
     client.connect(host, tcp_port)
 
     tickrate = 120

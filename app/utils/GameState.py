@@ -1,4 +1,4 @@
-from network.NetworkInfo import PlayerInfo
+from network.NetworkInfo import ClientPlayerInfo
 from multiprocessing import Process, Queue
 
 class GameState:
@@ -7,7 +7,7 @@ class GameState:
         self.current_state = "main_menu"
 
         self.player_id: int = None
-        self.players: dict[int, PlayerInfo] = {}
+        self.players: dict[int, ClientPlayerInfo] = {}
 
         self.host = None
         self.tcp_port = None

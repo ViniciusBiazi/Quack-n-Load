@@ -14,6 +14,7 @@ class GameOver:
         else:
             self.game_state.set_game_state("lobby")
             self.game_state.winner = None
+            self.return_to_lobby_timer = 2
             return
 
 

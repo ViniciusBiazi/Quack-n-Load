@@ -33,10 +33,12 @@ class Server:
 
         self.lock = threading.Lock() # lock para proteger o acesso ao dicionário de clientes
 
-        self.player_spawn_points = [(32*8, 18*8),
-                                    (16*8, 15*8),
-                                    (8*8, 24*8),
-                                    (40*8, 24*8)] # Posições de spawn do jogador
+        self.player_spawn_points = [(7*8, 20*8),
+                                    (7*8, 8*8),
+                                    (39*8, 8*8),
+                                    (15*8, 14*8),
+                                    (31*8, 14*8),
+                                    (39*8, 20*8)] # Posições de spawn do jogador
 
     # * OK
     def get_my_ip(self):
@@ -70,6 +72,7 @@ class Server:
             threading.Thread(target=self.listen_for_clients, daemon=True).start()
             threading.Thread(target=self.listen_udp_data, daemon=True).start() # cria uma nova thread para lidar com o cliente UDP
             threading.Thread(target=self.send_pings, daemon=True).start() # cria uma nova thread para manter o servidor ativo
+            threading.Thread(target=self.send_lobby_data, daemon=True).start() # cria uma nova thread para gerar pickups de armas
 
             self.server_to_game_queue.put(f"SERVER_STARTED:{self.host};{self.tcp_port}") # envia uma mensagem para o processo do jogo que o servidor foi iniciado
 
@@ -102,8 +105,17 @@ class Server:
     def send_pings(self):
         while self.running:
             self.broadcast(f"PING:{time.monotonic()}|") # envia um PING para todos os clientes
-            time.sleep(1) # espera 1 segundo        
-
+            time.sleep(1) # espera 1 segundo
+    
+    def send_lobby_data(self):
+        while self.running:
+            message = ""
+            for client_id, client in self.clients.items():
+                message += f"{client_id};{client.nickname};{client.kills};{client.deaths};{client.wins};{client.ping},"
+            message = message[:-1] # remove a última vírgula
+            self.broadcast(f"UPDATE_LOBBY_DATA:{message}|") # envia os dados dos clientes para todos os clientes
+            time.sleep(1) # espera 1 segundo
+            
     def listen_tcp_data(self, client_id):
         # pega o cliente da lista de clientes
         client = self.clients[client_id]
@@ -130,9 +142,7 @@ class Server:
                         _, time_stamp = message.split(":")
                         time_stamp = float(time_stamp)
                         ping = int((time.monotonic() - time_stamp) * 1000) # calcula o ping
-
-                        # Envia o PING para o cliente
-                        self.broadcast(f"UPDATE_PING:{client_id};{ping}|")
+                        client.ping = ping # atualiza o ping do cliente
 
                     elif message.startswith("DISCONNECT"):
                         # desconecta o cliente
@@ -174,19 +184,22 @@ class Server:
                 # print(f"Received game data from client: {message}")
 
                 if message.startswith("GAME_CONNECTION:"):
-                    _, client_id = message.split(":")
+                    _, info = message.split(":")
+                    client_id, nickname = info.split(";")
+
                     client_id = int(client_id)
 
                     if client_id in self.clients: # verifica se o cliente existe
                         with self.lock:
                             client = self.clients[client_id]
                             client.udp_addr = addr # atualiza o endereço do cliente
+                            client.nickname = nickname # atualiza o nickname do cliente
 
                             for other_client_id, other_client in self.clients.items():
                                 if other_client_id != client_id:
-                                    client.tcp_socket.sendall(f"ADD_PLAYER:{other_client_id}|".encode()) # envia os dados dos clientes ja conectados para o novo cliente
+                                    client.tcp_socket.sendall(f"ADD_PLAYER:{other_client_id};{other_client.nickname}|".encode()) # envia os dados dos clientes ja conectados para o novo cliente
 
-                        self.broadcast(f"ADD_PLAYER:{client_id}|", exclude_client_id=client_id) # envia uma mensagem para todos os clientes que um novo player foi adicionado
+                        self.broadcast(f"ADD_PLAYER:{client_id};{nickname}|", exclude_client_id=client_id) # envia uma mensagem para todos os clientes que um novo player foi adicionado
 
                 if not self.in_game:
                     continue
@@ -206,12 +219,10 @@ class Server:
                     client_id, x, y, angle, speed, damage, projectile_type = info.split(";")
 
                     client_id = int(client_id)
+
                     projectile_id = self.gen_id(self.projectiles.keys())
-
-                    # Cria um novo projétil
-                    projectile = ServerProjectileInfo(projectile_id, damage) # cria um novo projétil
-
-                    self.projectiles[projectile_id] = projectile # adiciona o projétil à lista de projéteis
+                    self.projectiles[projectile_id] = ServerProjectileInfo(projectile_id, damage, client_id) # cria um novo projétil
+                    
                     self.broadcast(f"ADD_PROJECTILE:{client_id};{projectile_id};{x};{y};{angle};{speed};{damage};{projectile_type}", udp=True)
 
                 elif message.startswith("DEAL_DAMAGE:"):
@@ -243,6 +254,7 @@ class Server:
                     if qtd_alive > 1:
                         self.broadcast(f"KILL_PLAYER:{client_id}", udp=True)
                     else:
+                        self.clients[alive_players[0].id].wins += 1 # adiciona uma vitória ao jogador que sobrou
                         self.broadcast(f"GAME_OVER:{alive_players[0].id}") # envia uma mensagem para todos os clientes que o jogo acabou
                         self.reset_game() # reinicia o jogo
             # * -------------------------------------------------------------------
@@ -300,17 +312,17 @@ class Server:
         self.running = False
         self.accepting = False
 
-        with self.lock:
-            clients_copy = self.clients.copy() # faz uma cópia do dicionário de clientes
-            self.clients.clear() # limpa o dicionário de clientes
+        # with self.lock:
+        #     clients_copy = self.clients.copy() # faz uma cópia do dicionário de clientes
+        #     self.clients.clear() # limpa o dicionário de clientes
 
-        for client_id, client in clients_copy.items():
-            try:
-                if client.tcp_socket:
-                    client.tcp_socket.close()
+        # for client_id, client in clients_copy.items():
+        #     try:
+        #         if client.tcp_socket:
+        #             client.tcp_socket.close()
 
-            except Exception as e:
-                print(f"Error closing client {client_id}: {e}")
+        #     except Exception as e:
+        #         print(f"Error closing client {client_id}: {e}")
 
         if self.tcp_socket:
             try:
