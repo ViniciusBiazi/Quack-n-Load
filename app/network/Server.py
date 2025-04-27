@@ -72,7 +72,6 @@ class Server:
             threading.Thread(target=self.listen_for_clients, daemon=True).start()
             threading.Thread(target=self.listen_udp_data, daemon=True).start() # cria uma nova thread para lidar com o cliente UDP
             threading.Thread(target=self.send_pings, daemon=True).start() # cria uma nova thread para manter o servidor ativo
-            threading.Thread(target=self.send_lobby_data, daemon=True).start() # cria uma nova thread para gerar pickups de armas
 
             self.server_to_game_queue.put(f"SERVER_STARTED:{self.host};{self.tcp_port}") # envia uma mensagem para o processo do jogo que o servidor foi iniciado
 
@@ -87,6 +86,11 @@ class Server:
                 client_tcp_socket, client_tcp_addr = self.tcp_socket.accept() # aceita um novo cliente TCP
 
                 with self.lock:
+                    if self.in_game: # verifica se o servidor está em jogo
+                        client_tcp_socket.sendall(b"SERVER_IN_GAME|")
+                        client_tcp_socket.close()
+                        continue
+                    
                     if len(self.clients) >= self.max_clients: # verifica se o número máximo de clientes foi atingido
                         client_tcp_socket.sendall(b"SERVER_FULL|") # envia uma mensagem para o cliente que o servidor está cheio
                         client_tcp_socket.close() # fecha o socket TCP
@@ -104,16 +108,7 @@ class Server:
     # * OK
     def send_pings(self):
         while self.running:
-            self.broadcast(f"PING:{time.monotonic()}|") # envia um PING para todos os clientes
-            time.sleep(1) # espera 1 segundo
-    
-    def send_lobby_data(self):
-        while self.running:
-            message = ""
-            for client_id, client in self.clients.items():
-                message += f"{client_id};{client.nickname};{client.kills};{client.deaths};{client.wins};{client.ping},"
-            message = message[:-1] # remove a última vírgula
-            self.broadcast(f"UPDATE_LOBBY_DATA:{message}|") # envia os dados dos clientes para todos os clientes
+            self.broadcast(f"PING:{time.monotonic()}|", udp=True) # envia um PING para todos os clientes
             time.sleep(1) # espera 1 segundo
             
     def listen_tcp_data(self, client_id):
@@ -144,9 +139,9 @@ class Server:
                         ping = int((time.monotonic() - time_stamp) * 1000) # calcula o ping
                         client.ping = ping # atualiza o ping do cliente
 
+                        self.broadcast(f"UPDATE_PING:{client_id};{ping}", udp=True) # envia o ping para todos os clientes
+
                     elif message.startswith("DISCONNECT"):
-                        # desconecta o cliente
-                        self.broadcast(f"REMOVE_PLAYER:{client_id}|", exclude_client_id=client_id) # envia para os outros clientes que o jogador foi removido
                         break
 
                     elif message.startswith("GAME_STARTED"):
@@ -163,17 +158,15 @@ class Server:
                 break
         
         # Remove o cliente da lista de clientes
-        if client_id in self.clients:
-            if client.tcp_socket:
-                try:
-                    client.tcp_socket.shutdown(socket.SHUT_RDWR)
-                    client.tcp_socket.close() # fecha o socket TCP
+        client = self.clients.pop(client_id, None) # remove o cliente da lista de clientes
+        if client:
+            try:
+                client.tcp_socket.close() # fecha o socket TCP do cliente
 
-                except Exception as e:
-                    print(f"Error closing client {client_id}: {e}")
-            
+            except Exception as e:
+                print(f"Error closing client {client_id}: {e}")
+
             self.broadcast(f"REMOVE_PLAYER:{client_id}|", exclude_client_id=client_id) # envia para os outros clientes que o jogador foi removido
-            del self.clients[client_id] # remove o cliente da lista de clientes
 
     def listen_udp_data(self):
         while self.running:
@@ -197,9 +190,9 @@ class Server:
 
                             for other_client_id, other_client in self.clients.items():
                                 if other_client_id != client_id:
-                                    client.tcp_socket.sendall(f"ADD_PLAYER:{other_client_id};{other_client.nickname}|".encode()) # envia os dados dos clientes ja conectados para o novo cliente
+                                    client.tcp_socket.sendall(f"ADD_PLAYER:{other_client_id};{other_client.nickname};{other_client.kills};{other_client.deaths};{other_client.wins}|".encode()) # envia os dados dos clientes ja conectados para o novo cliente
 
-                        self.broadcast(f"ADD_PLAYER:{client_id};{nickname}|", exclude_client_id=client_id) # envia uma mensagem para todos os clientes que um novo player foi adicionado
+                        self.broadcast(f"ADD_PLAYER:{client_id};{nickname};{client.kills};{client.deaths};{client.wins}|", exclude_client_id=client_id) # envia os dados do cliente para os outros clientes
 
                 if not self.in_game:
                     continue
@@ -255,7 +248,13 @@ class Server:
                         self.broadcast(f"KILL_PLAYER:{client_id}", udp=True)
                     else:
                         self.clients[alive_players[0].id].wins += 1 # adiciona uma vitória ao jogador que sobrou
-                        self.broadcast(f"GAME_OVER:{alive_players[0].id}") # envia uma mensagem para todos os clientes que o jogo acabou
+
+                        message = ""
+                        for client_id, client in self.clients.items():
+                            message += f"{client_id};{client.kills};{client.deaths};{client.wins},"
+                        message = message[:-1] # remove a última vírgula
+
+                        self.broadcast(f"UPDATE_LOBBY_DATA:{message}|GAME_OVER:{alive_players[0].id}|") # envia uma mensagem para todos os clientes que o jogo acabou
                         self.reset_game() # reinicia o jogo
             # * -------------------------------------------------------------------
             # * Comandos sobre os pickups de armas  
@@ -393,7 +392,6 @@ class Server:
                     self.broadcast(f"REMOVE_WEAPON_PICKUP:{weapon_pickup.id}", udp=True)
                     self.weapon_pickups.pop(weapon_pickup.id, None) # remove o pickup de arma da lista de pickups
 # * -------------------------------------------------------------------
-
     def gen_id(self, ids) -> int:
         """ Gera o primeiro ID disponivel. """
         id = 0
@@ -429,6 +427,10 @@ def start_server_process(server_to_game_queue: Queue, game_to_server_queue: Queu
             
             elif message.startswith("START_GAME"):
                 server.start_game()
+
+            # TODO implementar a saida do jogo no meio de uma partida ( volta para o lobby )
+            # elif message.startswith("END_GAME"):
+            #     server.reset_game()
         
         elapsed_time = time.monotonic() - start_time
         sleep_time = tick_duration - elapsed_time

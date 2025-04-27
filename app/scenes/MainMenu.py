@@ -5,16 +5,19 @@ from utils.GameState import GameState
 
 class MainMenu:
     def __init__(self, game_state: GameState):
-        self.selected_option = 0
-        self.options = ["Host", "Join", "Options", "Exit"]
-        self.title = "Quack'n'Load"
         self.game_state = game_state
+
+        self.options = ["Host", "Join", "Exit"]
+        self.selected_option = 0
+        self.title = "Quack'n'Load"
 
     def update(self):
         if btnp(KEY_UP):
             self.selected_option = (self.selected_option - 1) % len(self.options)
+
         elif btnp(KEY_DOWN):
             self.selected_option = (self.selected_option + 1) % len(self.options)
+
         elif btnp(KEY_RETURN):
             match self.selected_option:
                 case 0:
@@ -24,14 +27,15 @@ class MainMenu:
                     print("Join selected")
                     self.game_state.set_game_state("join_menu")
                 case 2:
-                    print("Options selected")
-                    # Menu de opções (a implementar)
-                case 3:
                     quit()
+        
+        elif btnp(KEY_ESCAPE):
+            quit()
 
     def draw(self):
-        pyxel.text(50, 50, self.title, 7)
+        cls(0)
+        text(20, 20, self.title, 7)
 
         for i, option in enumerate(self.options):
             color = 10 if i == self.selected_option else 7
-            pyxel.text(50, 70 + i * 10, option, color)
+            pyxel.text(20, 50 + i * 10, option, color)

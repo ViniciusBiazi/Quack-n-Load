@@ -64,6 +64,18 @@ class Game:
                     weapon = (weapon_x, weapon_y, weapon_sprite, weapon_rotation)
 
                 self.player_manager.update_remote_player(client_id, x, y, sprite, weapon)
+
+            elif data.startswith("REMOVE_PLAYER:"):
+                _, client_id = data.split(":")
+                client_id = int(client_id)
+
+                self.game_state.players.pop(client_id, None)
+                self.player_manager.kill_player(client_id)
+
+            elif data.startswith("DISCONNECTED"):
+                self.game_state.reset()
+                self.game_state.set_game_state("main_menu")
+                return
         # * -------------------------------------------------------------------
         # * Comandos sobre os projéteis
             elif data.startswith("ADD_PROJECTILE:"):
@@ -134,12 +146,28 @@ class Game:
                     self.player_manager.player.pickup_weapon(weapon_pickup)
                     self.weapon_pickup_manager.remove_weapon_pickup(weapon_pickup_id)
         # * -------------------------------------------------------------------
+            elif data.startswith("UPDATE_LOBBY_DATA:"):
+                _, info = data.split(":")
+                parts = info.split(",")
+
+                for part in parts:
+                    client_id, kills, deaths, wins = part.split(";")
+                    client_id = int(client_id)
+                    kills = int(kills)
+                    deaths = int(deaths)
+                    wins = int(wins)
+
+                    if client_id in self.game_state.players.keys():
+                        self.game_state.players[client_id].kills = kills
+                        self.game_state.players[client_id].deaths = deaths
+                        self.game_state.players[client_id].wins = wins
+
             elif data.startswith("GAME_OVER:"):
                 _, player_id = data.split(":")
 
                 player_id = int(player_id)
 
-                self.game_state.winner = player_id
+                self.game_state.winner_id = player_id
 
                 self.reset_all()
                 return
@@ -158,6 +186,17 @@ class Game:
         if self.player_manager.player:
             self.game_state.game_to_client_queue.put(f"UPDATE_PLAYER:{self.player_manager.get_player_data()}")    
 
+        if btnp(KEY_ESCAPE):
+            if self.game_state.is_host:
+                self.game_state.game_to_server_queue.put("STOP_SERVER")
+
+            else:
+                self.game_state.game_to_client_queue.put("DISCONNECT")
+
+            self.game_state.reset()
+            self.game_state.set_game_state("main_menu")
+            return
+        
     def draw(self):
         self.world.draw()
 

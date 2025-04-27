@@ -13,11 +13,11 @@ class GameOver:
             self.return_to_lobby_timer -= delta_time
         else:
             self.game_state.set_game_state("lobby")
-            self.game_state.winner = None
+            self.game_state.winner_id = None
             self.return_to_lobby_timer = 2
             return
 
 
     def draw(self):
         pyxel.text(50, 40, "Game Over", 7)
-        pyxel.text(50, 60, f"Winner: {self.game_state.players[self.game_state.winner].nickname}", 7)
+        pyxel.text(50, 60, f"Winner: {self.game_state.players[self.game_state.winner_id].nickname}", 7)

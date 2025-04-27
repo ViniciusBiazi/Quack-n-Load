@@ -59,6 +59,10 @@ class Client:
                     if message.startswith("SERVER_FULL"):
                         self.client_to_game_queue.put("SERVER_FULL")
                         break
+                    
+                    elif message.startswith("SERVER_IN_GAME"):
+                        self.client_to_game_queue.put("SERVER_IN_GAME")
+                        break
 
                     elif message.startswith("GAME_CONNECTION:"):
                         _, info = message.split(":")
@@ -76,8 +80,10 @@ class Client:
                         self.udp_socket.sendto(f"GAME_CONNECTION:{self.client_id};{self.nickname}".encode(), (self.host, self.udp_port))
                     
                     elif message.startswith("PING:"):
-                        # Respond to the server's PING
                         self.tcp_socket.sendall(message.encode())
+
+                    elif message.startswith("UPDATE_PING:"):
+                        self.client_to_game_queue.put(message) # Send the ping update to the game process
 
                     elif message.startswith("UPDATE_LOBBY_DATA:"):
                         self.client_to_game_queue.put(message) # Send the player update to the game process

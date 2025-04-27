@@ -8,12 +8,12 @@ class GameState:
 
         self.player_id: int = None
         self.players: dict[int, ClientPlayerInfo] = {}
+        self.winner_id: int = None
 
         self.host = None
         self.tcp_port = None
 
         self.is_host = False
-        self.winner: int = None
 
         self.server_process: Process = None
         self.server_to_game_queue: Queue = None
@@ -32,7 +32,8 @@ class GameState:
 
     def reset(self):
         self.player_id = None
-        self.players = {}
+        self.players.clear()
+        self.winner_id = None
 
         self.host = None
         self.tcp_port = None
