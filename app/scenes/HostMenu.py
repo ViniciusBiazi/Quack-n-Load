@@ -111,8 +111,8 @@ class HostMenu:
         rect(50, 50 - 2, 63, 9, 1) # borda do campo
         text(52, 50, self.input, 7) # texto do campo
 
-        text(20, pyxel.height - 20, "ENTER: Host Game", 9)
-        text(110, pyxel.height - 20, "ESQ: Back", 8)
+        text(20, pyxel.height - 20, "ESQ: Back", 8)
+        text(80, pyxel.height - 20, "ENTER: Host Game", 9)
 
         # Mensagem de status
         if self.status_message:

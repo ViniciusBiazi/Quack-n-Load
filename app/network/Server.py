@@ -159,6 +159,7 @@ class Server:
         
         # Remove o cliente da lista de clientes
         client = self.clients.pop(client_id, None) # remove o cliente da lista de clientes
+
         if client:
             try:
                 client.tcp_socket.close() # fecha o socket TCP do cliente
@@ -167,6 +168,21 @@ class Server:
                 print(f"Error closing client {client_id}: {e}")
 
             self.broadcast(f"REMOVE_PLAYER:{client_id}|", exclude_client_id=client_id) # envia para os outros clientes que o jogador foi removido
+
+            if self.in_game:
+                alive_players = [client for client in self.clients.values() if not client.dead] # pega todos os jogadores vivos
+                qtd_alive = len(alive_players) # conta quantos jogadores estão vivos
+                
+                if not qtd_alive > 1:
+                    self.clients[alive_players[0].id].wins += 1 # adiciona uma vitória ao jogador que sobrou
+
+                    message = ""
+                    for client_id, client in self.clients.items():
+                        message += f"{client_id};{client.kills};{client.deaths};{client.wins},"
+                    message = message[:-1] # remove a última vírgula
+
+                    self.broadcast(f"UPDATE_LOBBY_DATA:{message}|GAME_OVER:{alive_players[0].id}|") # envia uma mensagem para todos os clientes que o jogo acabou
+                    self.reset_game() # reinicia o jogo
 
     def listen_udp_data(self):
         while self.running:
@@ -311,17 +327,7 @@ class Server:
         self.running = False
         self.accepting = False
 
-        # with self.lock:
-        #     clients_copy = self.clients.copy() # faz uma cópia do dicionário de clientes
-        #     self.clients.clear() # limpa o dicionário de clientes
-
-        # for client_id, client in clients_copy.items():
-        #     try:
-        #         if client.tcp_socket:
-        #             client.tcp_socket.close()
-
-        #     except Exception as e:
-        #         print(f"Error closing client {client_id}: {e}")
+        self.broadcast("SERVER_STOPPED|")
 
         if self.tcp_socket:
             try:
@@ -422,15 +428,10 @@ def start_server_process(server_to_game_queue: Queue, game_to_server_queue: Queu
             # print(f"Received from game: {message}")
 
             if message.startswith("STOP_SERVER"):
-                server.broadcast("SERVER_STOPPED|")
                 server.stop_server()
             
             elif message.startswith("START_GAME"):
                 server.start_game()
-
-            # TODO implementar a saida do jogo no meio de uma partida ( volta para o lobby )
-            # elif message.startswith("END_GAME"):
-            #     server.reset_game()
         
         elapsed_time = time.monotonic() - start_time
         sleep_time = tick_duration - elapsed_time

@@ -83,7 +83,7 @@ class Lobby:
             text(20, 75 + i * 10, label, 11)
 
         if self.game_state.is_host:
-            text(20, pyxel.height - 20, "ENTER: Start Game", 9)
+            text(80, pyxel.height - 20, "ENTER: Start Game", 9)
         
-        text(110, pyxel.height - 20, "ESQ: Quit", 8)
+        text(20, pyxel.height - 20, "ESQ: Quit", 8)
 

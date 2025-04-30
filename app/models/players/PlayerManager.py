@@ -98,6 +98,7 @@ class PlayerManager:
     
     def receive_damage(self, player_id, damage):
         """ Recebe dano do jogador remoto. """
+        play(2, 13)
         if self.player:
             self.player.health -= damage
             if self.player.health <= 0:

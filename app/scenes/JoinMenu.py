@@ -126,8 +126,8 @@ class JoinMenu:
             rect(50, y - 2, 63, 9, 1)
             text(52, y, self.inputs[i], 7)
 
-        text(20, pyxel.height - 20, "ENTER: Join Game", 9)
-        text(110, pyxel.height - 20, "ESQ: Back", 8)
+        text(20, pyxel.height - 20, "ESQ: Back", 8)
+        text(80, pyxel.height - 20, "ENTER: Join Game", 9)
 
         # Mensagem de status
         if self.status_message:

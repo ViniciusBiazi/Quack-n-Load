@@ -116,6 +116,7 @@ class Player(PhysicsObject):
             self.on_ground = False  # Reseta o estado de estar no chão
             self.jump_buffer = 0  # Reseta o buffer de pulo
             self.coyote_time = 0  # Reseta o tempo de coyote
+            play(2, 12)
 
         if btnp(KEY_E):
             for weapon_id, weapon_pickup in self.weapon_pickup_manager.weapon_pickups.items():
