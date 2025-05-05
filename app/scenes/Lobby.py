@@ -71,8 +71,7 @@ class Lobby:
         text(20, 45, f"Server Address: {self.game_state.host}:{self.game_state.tcp_port}", 10)
         text(20, 65, "| ID | Nickname        | Kills | Deaths | Wins | Ping |", 7)
 
-        # Ordena por ID para manter consistência
-        player_list = sorted(self.game_state.players.values(), key=lambda x: x.wins, reverse=True) # ordena por kills
+        player_list = sorted(self.game_state.players.values(), key=lambda x: x.wins, reverse=True) # ordena por wins
 
         for i, player in enumerate(player_list):
             label = f"| {player.id:2} | {player.nickname:15} | {player.kills:5} | {player.deaths:6} | {player.wins:4} | {player.ping:4} |"
