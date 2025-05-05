@@ -106,7 +106,6 @@ class Game:
                 damage = int(damage)
                 
                 self.player_manager.receive_damage(player_id, damage)
-
             elif data.startswith("KILL_PLAYER:"):
                 _, player_id = data.split(":")
 
@@ -170,6 +169,7 @@ class Game:
                 self.game_state.winner_id = player_id
 
                 self.reset_all()
+                self.game_state.set_game_state("game_over")
                 return
 
         self.physics_manager.update_physics_manager(delta_time)
@@ -194,6 +194,7 @@ class Game:
                 self.game_state.game_to_client_queue.put("DISCONNECT")
 
             self.game_state.reset()
+            self.reset_all()
             self.game_state.set_game_state("main_menu")
             return
         
@@ -211,5 +212,3 @@ class Game:
         self.projectile_manager.reset_projectile_manager()
         self.weapon_pickup_manager.reset_weapon_pickup_manager()
         self.physics_manager.reset_physics_manager()
-
-        self.game_state.set_game_state("game_over")

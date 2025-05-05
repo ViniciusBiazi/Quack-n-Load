@@ -146,12 +146,11 @@ class Server:
 
                     elif message.startswith("GAME_STARTED"):
                         random.shuffle(self.player_spawn_points)
-                        with self.lock:
-                            for id in self.clients.keys():
-                                x, y = self.player_spawn_points.pop()
-                                self.player_spawn_points.append((x, y)) # adiciona o ponto de spawn no final da lista
-                                
-                                client.tcp_socket.sendall(f"ADD_GAME_PLAYER:{id};{x};{y}|".encode())
+                        for id in list(self.clients.keys()):
+                            x, y = self.player_spawn_points.pop()
+                            self.player_spawn_points.append((x, y)) # adiciona o ponto de spawn no final da lista
+                            
+                            client.tcp_socket.sendall(f"ADD_GAME_PLAYER:{id};{x};{y}|".encode())
 
             except Exception as e:
                 print(f"Error handling client {client_id}: {e}")
@@ -199,14 +198,14 @@ class Server:
                     client_id = int(client_id)
 
                     if client_id in self.clients: # verifica se o cliente existe
-                        with self.lock:
-                            client = self.clients[client_id]
-                            client.udp_addr = addr # atualiza o endereço do cliente
-                            client.nickname = nickname # atualiza o nickname do cliente
 
-                            for other_client_id, other_client in self.clients.items():
-                                if other_client_id != client_id:
-                                    client.tcp_socket.sendall(f"ADD_PLAYER:{other_client_id};{other_client.nickname};{other_client.kills};{other_client.deaths};{other_client.wins}|".encode()) # envia os dados dos clientes ja conectados para o novo cliente
+                        client = self.clients[client_id]
+                        client.udp_addr = addr # atualiza o endereço do cliente
+                        client.nickname = nickname # atualiza o nickname do cliente
+
+                        for other_client_id, other_client in list(self.clients.items()):
+                            if other_client_id != client_id:
+                                client.tcp_socket.sendall(f"ADD_PLAYER:{other_client_id};{other_client.nickname};{other_client.kills};{other_client.deaths};{other_client.wins}|".encode()) # envia os dados dos clientes ja conectados para o novo cliente
 
                         self.broadcast(f"ADD_PLAYER:{client_id};{nickname};{client.kills};{client.deaths};{client.wins}|", exclude_client_id=client_id) # envia os dados do cliente para os outros clientes
 
@@ -309,22 +308,22 @@ class Server:
         self.stop_server() # fecha o servidor se houver um erro
 
     def broadcast(self, message, exclude_client_id=None, udp=False):
-        with self.lock:
-            for client_id, client in self.clients.items():
-                if exclude_client_id is not None and client_id == exclude_client_id:
-                    continue
+        for client_id, client in list(self.clients.items()):
+            if exclude_client_id is not None and client_id == exclude_client_id:
+                continue
 
-                try:
-                    if udp and client.udp_addr:
-                        self.udp_socket.sendto(message.encode(), client.udp_addr) # envia dados para o cliente UDP
-                    else:
-                        client.tcp_socket.sendall(message.encode()) # envia dados para o cliente TCP
+            try:
+                if udp and client.udp_addr:
+                    self.udp_socket.sendto(message.encode(), client.udp_addr) # envia dados para o cliente UDP
+                else:
+                    client.tcp_socket.sendall(message.encode()) # envia dados para o cliente TCP
 
-                except Exception as e:
-                    print(f"Error broadcasting to client {client_id}: {e}")
+            except Exception as e:
+                print(f"Error broadcasting to client {client_id}: {e}")
 
     def stop_server(self):
         self.running = False
+        self.in_game = False
         self.accepting = False
 
         self.broadcast("SERVER_STOPPED|")
@@ -356,7 +355,7 @@ class Server:
         self.in_game = False
         self.projectiles.clear()
         self.weapon_pickups.clear()
-        for client in self.clients.values():
+        for client in list(self.clients.values()):
             client.dead = False
 # * -------------------------------------------------------------------
 # TODO rever essa logica ( VER SOBRE LOCKS )

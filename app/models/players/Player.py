@@ -174,6 +174,7 @@ class Player(PhysicsObject):
 
     def pickup_weapon(self, weapon_pickup: WeaponPickup):
         """ Adiciona uma nova arma ao jogador. """
+        play(3, 14)
         if self.weapon:
             self.weapon_pickup_manager.drop_weapon(self.weapon)
             self.weapon = None
